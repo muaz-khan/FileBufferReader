@@ -1,7 +1,7 @@
 {
   "name": "fbr",
   "preferGlobal": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": {
     "name": "Muaz Khan",
     "email": "muazkh@gmail.com",
@@ -44,6 +44,6 @@
     "email": "muazkh@gmail.com"
   },
   "homepage": "https://www.WebRTC-Experiment.com/FileBufferReader/",
-  "_id": "fbr@1.0.0",
+  "_id": "fbr@1.0.1",
   "_from": "fbr@"
 }

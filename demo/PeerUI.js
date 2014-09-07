@@ -1,4 +1,4 @@
-// Last time updated at Sep 06, 2014, 08:32:23
+// Last time updated at Sep 07, 2014, 08:32:23
 
 // Latest file can be found here: https://cdn.webrtc-experiment.com/FileBufferReader.js
 
@@ -9,11 +9,17 @@
 // _________
 // PeerUI.js
 
+var setupOffer = document.getElementById('setup-offer'), innerHTML;
+
 var SIGNALING_URI = 'wss://wsnodejs.nodejitsu.com:443';
 
 var channel = location.href.replace(/\/|:|#|%|\.|\[|\]/g, '');
 var websocket = new WebSocket(SIGNALING_URI);
 websocket.onopen = function() {
+    innerHTML = '<span>Setup</span> <span>WebRTC Connection</span>';
+    setupOffer.innerHTML = innerHTML;
+    setupOffer.style.color = '';
+        
     console.log('websocket connection opened!');
     websocket.push(JSON.stringify({
         open: true,
@@ -65,6 +71,13 @@ var FileHelper = {
 // ----------------
 var peerConnection = new PeerConnection(websocket);
 
+peerConnection.onuserfound = function(userid) {
+    setupOffer.className += ' disabled';
+    setupOffer.innerHTML = 'Please wait a few seconds.';
+    
+    peerConnection.sendParticipationRequest(userid);
+};
+
 peerConnection.onopen = function() {
     innerHTML = '<span>PeerConnection</span> <span>is established.</span>';
     setupOffer.innerHTML = innerHTML;
@@ -98,7 +111,7 @@ peerConnection.ondata = function(chunk) {
         // array buffers are passed using WebRTC data channels
         // need to convert data back into JavaScript objects
     
-        fileBufferReader.ConvertToObject(chunk, function(object) {
+        fileBufferReader.convertToObject(chunk, function(object) {
             peerConnection.ondata(object);
         });
         return;
@@ -147,8 +160,6 @@ function updateLabel(progress, label) {
 }
 
 // --------------------------------------------------------
-var setupOffer = document.getElementById('setup-offer'),
-    innerHTML;
 setupOffer.onclick = function() {
     if (setupOffer.className.indexOf('disabled') != -1) {
         innerHTML = setupOffer.innerHTML;

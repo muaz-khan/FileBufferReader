@@ -1,4 +1,4 @@
-// Last time updated at Sep 06, 2014, 08:32:23
+// Last time updated at Sep 07, 2014, 08:32:23
 
 // Latest file can be found here: https://cdn.webrtc-experiment.com/FileBufferReader.js
 
@@ -11,31 +11,39 @@
 // FileBufferReader.js
 
 // FileBufferReader.js uses binarize.js to convert Objects into array-buffers and vice versa.
-// binarize.js is written by @agektmr: https://github.com/agektmr/binarize.js. He didn't apply any licence yet.
 // FileBufferReader.js is MIT licensed: www.WebRTC-Experiment.com/licence
+// binarize.js is written by @agektmr: https://github.com/agektmr/binarize.js.
+
+/* issues/features need to be fixed & implemented:
+-. "extra" must not be an empty object i.e. {} -because "binarize" fails to parse empty objects.
+-. "extra" must not have "date" types; -because "binarize" fails to parse date-types.
+*/
 
 (function() {
     window.FileBufferReader = function() {
         var fileBufferReader = this;
         fileBufferReader.chunks = {};
 
-        fileBufferReader.readAsArrayBuffer = function(file, callback, chunkSize) {
-            chunkSize = chunkSize || 12 * 1000; // Firefox limit is 16k
+        fileBufferReader.readAsArrayBuffer = function(file, callback, extra) {
+            extra = extra || {};
+            extra.chunkSize = extra.chunkSize || 12 * 1000; // Firefox limit is 16k
             
             File.Read(file, function(args) {
+                file.extra = extra || {};
                 args.file = file; // passed over "onEnd"
                 fileBufferReader.chunks[args.uuid] = args;
                 callback(args.uuid);
-            }, chunkSize);
+            }, extra);
         };
 
         fileBufferReader.getNextChunk = function(uuid, callback) {
             var chunks = fileBufferReader.chunks[uuid];
             if (!chunks) return;
+            
+            var currentChunk = chunks.listOfChunks[chunks.currentPosition];
+            var isLastChunk = currentChunk && currentChunk.end;
 
-            var isLastChunk = chunks.listOfChunks[chunks.currentPosition] && chunks.listOfChunks[chunks.currentPosition].end;
-
-            FileConverter.ConvertToArrayBuffer(chunks.listOfChunks[chunks.currentPosition], function(buffer) {
+            FileConverter.ConvertToArrayBuffer(currentChunk, function(buffer) {
                 if (chunks.currentPosition == 0) {
                     fileBufferReader.onBegin(chunks.file);
                 }
@@ -44,16 +52,17 @@
                     fileBufferReader.onEnd(chunks.file);
                 }
 
-                callback(buffer, isLastChunk);
+                callback(buffer, isLastChunk, currentChunk.extra);
                 fileBufferReader.onProgress({
                     currentPosition: chunks.currentPosition,
                     maxChunks: chunks.maxChunks,
-                    uuid: chunks.uuid
+                    uuid: chunks.uuid,
+                    extra: currentChunk.extra
                 });
                 fileBufferReader.chunks[uuid].currentPosition++;
             });
         };
-
+        
         fileBufferReader.onBegin = fileBufferReader.onProgress = fileBufferReader.onEnd = function() {};
 
         var receiver = new File.Receiver(fileBufferReader);
@@ -67,7 +76,7 @@
             });
         };
         
-        fileBufferReader.ConvertToObject = FileConverter.ConvertToObject;
+        fileBufferReader.convertToObject = FileConverter.ConvertToObject;
     };
 
     window.FileSelector = function() {
@@ -83,7 +92,7 @@
             file.type = 'file';
 
             if (multiple) {
-                file.multiparts = true;
+                file.multiple = true;
             }
 
             file.onchange = function() {
@@ -104,19 +113,14 @@
     };
 
     var File = {
-        Send: function(args) {
-            FileConverter.ConvertToArrayBuffer(args.chunk, function(buffer) {
-                args.tunnel.send(buffer);
-                args.onSent();
-            });
-        },
-        Read: function(file, callback, chunkSize) {
+        Read: function(file, callback, extra) {
             var numOfChunksInSlice;
             var currentPosition = 1;
             var hasEntireFile;
             var listOfChunks = {};
 
-            chunkSize = chunkSize || 40 * 1000; // 64k max sctp limit (AFAIK!)
+            var chunkSize = extra.chunkSize || 60 * 1000; // 64k max sctp limit (AFAIK!)
+            
             var sliceId = 0;
             var cacheSize = chunkSize;
 
@@ -125,16 +129,17 @@
             var maxChunks = Math.ceil(file.size / chunkSize);
 
             // uuid is used to uniquely identify sending instance
-            var uuid = (Math.random() * new Date().getTime()).toString(36).toUpperCase().replace(/\./g, '-');
+            var uuid = (Math.random() * new Date().getTime()).toString(36).replace(/\./g, '-');
 
             listOfChunks[0] = {
                 uuid: uuid,
                 maxChunks: maxChunks,
                 size: file.size,
                 name: file.name,
-                lastModifiedDate: file.lastModifiedDate.toString(),
+                lastModifiedDate: file.lastModifiedDate + '',
                 type: file.type,
-                start: true
+                start: true,
+                extra: extra
             };
 
             file.maxChunks = maxChunks;
@@ -157,15 +162,17 @@
                                 maxChunks: maxChunks,
                                 size: file.size,
                                 name: file.name,
-                                lastModifiedDate: file.lastModifiedDate.toString(),
+                                lastModifiedDate: file.lastModifiedDate + '',
                                 type: file.type,
-                                end: true
+                                end: true,
+                                extra: extra
                             };
                             callback({
                                 currentPosition: 0,
                                 listOfChunks: listOfChunks,
                                 maxChunks: maxChunks + 1,
-                                uuid: uuid
+                                uuid: uuid,
+                                extra: extra
                             });
                         }
                     });
@@ -183,7 +190,8 @@
                         uuid: uuid,
                         value: binarySlice.slice(start, Math.min(start + chunkSize, binarySlice.byteLength)),
                         currentPosition: currentPosition,
-                        maxChunks: maxChunks
+                        maxChunks: maxChunks,
+                        extra: extra
                     };
 
                     currentPosition++;
@@ -270,14 +278,10 @@
     // FileConverter.js
     var FileConverter = {
         ConvertToArrayBuffer: function(object, callback) {
-            binarize.pack(object, function(buffer) {
-                callback(buffer);
-            });
+            binarize.pack(object, callback);
         },
         ConvertToObject: function(buffer, callback) {
-            binarize.unpack(buffer, function(unpacked) {
-                callback(unpacked);
-            });
+            binarize.unpack(buffer, callback);
         }
     };
 
