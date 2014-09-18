@@ -1,4 +1,4 @@
-// Last time updated at Sep 14, 2014, 08:32:23
+// Last time updated at Sep 18, 2014, 08:32:23
 
 // Latest file can be found here: https://cdn.webrtc-experiment.com/FileBufferReader.js
 
@@ -15,6 +15,7 @@
 // binarize.js is written by @agektmr: https://github.com/agektmr/binarize.js.
 
 /* issues/features need to be fixed & implemented:
+-. Now "ArrayBuffer" is returned instead of "DataView".
 -. "onEnd" for sender now having "url" property as well; same as file receiver.
 -. "extra" must not be an empty object i.e. {} -because "binarize" fails to parse empty objects.
 -. "extra" must not have "date" types; -because "binarize" fails to parse date-types.
@@ -79,6 +80,7 @@
         };
         
         fileBufferReader.convertToObject = FileConverter.ConvertToObject;
+        fileBufferReader.convertToArrayBuffer = FileConverter.ConvertToArrayBuffer;
     };
 
     window.FileSelector = function() {
@@ -131,7 +133,7 @@
             var maxChunks = Math.ceil(file.size / chunkSize);
 
             // uuid is used to uniquely identify sending instance
-            var uuid = (Math.random() * new Date().getTime()).toString(36).replace(/\./g, '-');
+            var uuid = file.uuid || (Math.random() * new Date().getTime()).toString(36).replace(/\./g, '-');
 
             listOfChunks[0] = {
                 uuid: uuid,
@@ -280,7 +282,9 @@
     // FileConverter.js
     var FileConverter = {
         ConvertToArrayBuffer: function(object, callback) {
-            binarize.pack(object, callback);
+            binarize.pack(object, function(dataView) {
+                callback(dataView.buffer);
+            });
         },
         ConvertToObject: function(buffer, callback) {
             binarize.unpack(buffer, callback);
