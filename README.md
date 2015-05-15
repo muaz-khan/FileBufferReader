@@ -32,9 +32,9 @@ To use it:
 <script src="./node_modules/fbr/FileBufferReader.js"></script>
 ```
 
-## fbr-client
+## [fbr-client](https://github.com/muaz-khan/FileBufferReader/tree/master/fbr-client)
 
-You can even try socket.io file sharing client:
+You can even try [socket.io file sharing client](https://github.com/muaz-khan/FileBufferReader/tree/master/fbr-client):
 
 ```
 npm install fbr-client
@@ -46,7 +46,7 @@ Then run the server:
 node ./node_modules/fbr-client/server.js
 ```
 
-Then open: `http://localhost:8888/` or `http://local-ip:8888/`.
+Then open: `http://localhost:8888/` or `http://127.0.0.1:8888/`.
 
 ## FileBufferReader API
 
@@ -215,14 +215,11 @@ fileBufferReader.onEnd      = FileHelper.onEnd;
 
 ## Credits
 
-[Muaz Khan](https://github.com/muaz-khan):
+[Muaz Khan](https://github.com/muaz-khan) ( muazkh@gmail.com ):
 
 1. Personal Webpage: http://www.muazkhan.com
-2. Email: muazkh@gmail.com
-3. Twitter: https://twitter.com/muazkh and https://twitter.com/WebRTCWeb
-4. Google+: https://plus.google.com/+WebRTC-Experiment
-5. Facebook: https://www.facebook.com/WebRTC
+2. Twitter: [@muazkh](https://twitter.com/muazkh) and [@WebRTCWeb](https://twitter.com/WebRTCWeb)
 
 ## License
 
-[FileBufferReader.js](https://github.com/muaz-khan/FileBufferReader) is released under [MIT licence](https://www.webrtc-experiment.com/licence/) . Copyright (c) [Muaz Khan](https://plus.google.com/+MuazKhan).
+[FileBufferReader.js](https://github.com/muaz-khan/FileBufferReader) is released under [MIT licence](https://www.webrtc-experiment.com/licence/) . Copyright (c) [Muaz Khan](http://www.muazkhan.com/).

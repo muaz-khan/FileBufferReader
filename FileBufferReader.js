@@ -1,4 +1,4 @@
-// Last time updated at Sep 18, 2014, 08:32:23
+// Last time updated at May 15, 2015, 08:32:23
 
 // Latest file can be found here: https://cdn.webrtc-experiment.com/FileBufferReader.js
 
@@ -15,6 +15,7 @@
 // binarize.js is written by @agektmr: https://github.com/agektmr/binarize.js.
 
 /* issues/features need to be fixed & implemented:
+-. Fixed issue: https://github.com/muaz-khan/RTCMultiConnection/issues/41
 -. Now "ArrayBuffer" is returned instead of "DataView".
 -. "onEnd" for sender now having "url" property as well; same as file receiver.
 -. "extra" must not be an empty object i.e. {} -because "binarize" fails to parse empty objects.
@@ -27,10 +28,16 @@
         fileBufferReader.chunks = {};
 
         fileBufferReader.readAsArrayBuffer = function(file, callback, extra) {
+            if(!file) {
+                console.error('File or Blob is missing.');
+                return;
+            }
+            
             extra = extra || {};
             extra.chunkSize = extra.chunkSize || 12 * 1000; // Firefox limit is 16k
             
             File.Read(file, function(args) {
+                args = args || {};
                 file.extra = extra || {};
                 file.url = URL.createObjectURL(file);
                 args.file = file; // passed over "onEnd"
@@ -40,11 +47,20 @@
         };
 
         fileBufferReader.getNextChunk = function(uuid, callback) {
+            if(!uuid) {
+                console.error('"uuid" is missing.');
+                return;
+            }
+            
             var chunks = fileBufferReader.chunks[uuid];
             if (!chunks) return;
             
             var currentChunk = chunks.listOfChunks[chunks.currentPosition];
-            var isLastChunk = currentChunk && currentChunk.end;
+            if(!currentChunk) {
+                return;
+            }
+            
+            var isLastChunk = currentChunk.end;
 
             FileConverter.ConvertToArrayBuffer(currentChunk, function(buffer) {
                 if (chunks.currentPosition == 0) {
@@ -71,6 +87,11 @@
         var receiver = new File.Receiver(fileBufferReader);
 
         fileBufferReader.addChunk = function(chunk, callback) {
+            if(!chunk) {
+                console.error('Chunk is missing.');
+                return;
+            }
+            
             receiver.receive(chunk, function(uuid) {
                 FileConverter.ConvertToArrayBuffer({
                     readyForNextChunk: true,
@@ -100,7 +121,21 @@
             }
 
             file.onchange = function() {
-                callback(multiple ? file.files : file.files[0]);
+                if(multiple) {
+                    if(!file.files.length) {
+                        console.error('No file selected.');
+                        return;
+                    }
+                    callback(file.files);
+                    return;
+                }
+                
+                if(!file.files[0]) {
+                    console.error('No file selected.');
+                    return;
+                }
+                
+                callback(file.files[0]);
             };
             fireClickEvent(file);
         }
@@ -118,6 +153,8 @@
 
     var File = {
         Read: function(file, callback, extra) {
+            extra = extra || {};
+            
             var numOfChunksInSlice;
             var currentPosition = 1;
             var hasEntireFile;
