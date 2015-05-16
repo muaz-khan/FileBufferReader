@@ -57,6 +57,7 @@ Then open: `http://localhost:8888/` or `http://127.0.0.1:8888/`.
 5. `addChunk` method. It allows you store all received chunks in an array until entire file is received.
 6. `convertToObject` method. FileBufferReader assumes that you're sending ArrayBuffer using WebRTC data channels. It means that you'll be getting ArrayBuffer type in the `onmessage` event. `convertToObject` method allows you convert ArrayBuffer into JavaScript object type, which is helpful to check type of message.
 7. `convertToArrayBuffer` method. You can pass javascript object or any data-type, and this method will return `ArrayBuffer`.
+8. `setMultipleUsers` method. You can use it to pass array of known list of users. It allows you share same file with multiple users. It'll show multiple progress-bars.
 
 ## 1. Link The Library
 
@@ -207,6 +208,51 @@ function updateLabel(progress, label) {
 fileBufferReader.onBegin    = FileHelper.onBegin;
 fileBufferReader.onProgress = FileHelper.onProgress;
 fileBufferReader.onEnd      = FileHelper.onEnd;
+```
+
+## Sharing with multiple users?
+
+```javascript
+fbr.readAsArrayBuffer(file, function(uuid) {
+    fbr.setMultipleUsers(uuid, ['first-user', 'second-user', 'third-user']);
+    
+    ['first-user', 'second-user', 'third-user'].forEach(function(userid) {
+        fbr.getNextChunk(uuid, function(nextChunk, isLastChunk) {
+            specific_datachannel.send(nextChunk);
+        }, userid);
+    });
+});
+
+datachannel.onmessage = function(event) {
+    fbr.getNextChunk(message.uuid, function(nextChunk, isLastChunk) {
+        specific_datachannel.send(nextChunk);
+    }, specific_userid);
+};
+```
+
+1. Invoke `setMultipleUsers` method where 2nd argument MUST be list of known userids.
+2. Pass specific-userid as 3rd argument over `getNextChunk` method.
+
+To uniquely identify progress-bars for each user, watch for `remoteUserId` object:
+
+```javascript
+FileHelper.onBegin = function(file) {
+    if(file.remoteUserId) {
+        // file is being shared with multiple users
+    }
+};
+
+FileHelper.onEnd = function(file) {
+    if(file.remoteUserId) {
+        // file is being shared with multiple users
+    }
+};
+
+FileHelper.onProgress = function(chunk) {
+    if(chunk.remoteUserId) {
+        // file is being shared with multiple users
+    }
+};
 ```
 
 ## Applications using FileBufferReader

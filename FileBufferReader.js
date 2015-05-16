@@ -1,19 +1,14 @@
-// Last time updated at May 15, 2015, 08:32:23
-
+// Last time updated at May 16, 2015, 08:32:23
 // Latest file can be found here: https://cdn.webrtc-experiment.com/FileBufferReader.js
-
 // Muaz Khan    - www.MuazKhan.com
 // MIT License  - www.WebRTC-Experiment.com/licence
 // Source Code  - https://github.com/muaz-khan/FileBufferReader
 // Demo         - https://www.WebRTC-Experiment.com/FileBufferReader/
-
 // ___________________
 // FileBufferReader.js
-
 // FileBufferReader.js uses binarize.js to convert Objects into array-buffers and vice versa.
 // FileBufferReader.js is MIT licensed: www.WebRTC-Experiment.com/licence
 // binarize.js is written by @agektmr: https://github.com/agektmr/binarize.js.
-
 /* issues/features need to be fixed & implemented:
 -. Fixed issue: https://github.com/muaz-khan/RTCMultiConnection/issues/41
 -. Now "ArrayBuffer" is returned instead of "DataView".
@@ -21,21 +16,20 @@
 -. "extra" must not be an empty object i.e. {} -because "binarize" fails to parse empty objects.
 -. "extra" must not have "date" types; -because "binarize" fails to parse date-types.
 */
-
 (function() {
     window.FileBufferReader = function() {
         var fileBufferReader = this;
         fileBufferReader.chunks = {};
 
         fileBufferReader.readAsArrayBuffer = function(file, callback, extra) {
-            if(!file) {
+            if (!file) {
                 console.error('File or Blob is missing.');
                 return;
             }
-            
+
             extra = extra || {};
             extra.chunkSize = extra.chunkSize || 12 * 1000; // Firefox limit is 16k
-            
+
             File.Read(file, function(args) {
                 args = args || {};
                 file.extra = extra || {};
@@ -46,28 +40,77 @@
             }, extra);
         };
 
-        fileBufferReader.getNextChunk = function(uuid, callback) {
-            if(!uuid) {
+        fileBufferReader.setMultipleUsers = function(fileUUID, userids) {
+            if (!userids || !(userids instanceof Array)) {
+                console.error('Exepcted array of user-ids but either NULL or invalid value passed.');
+                return;
+            }
+
+            var chunks = fileBufferReader.chunks[fileUUID];
+            if (!chunks) {
+                console.error('No such file exists.');
+                return;
+            }
+
+            if (!chunks.file) {
+                for (var chunk in chunks) {
+                    chunks = chunks[chunk];
+                    continue;
+                }
+            } else {
+                fileBufferReader.chunks[fileUUID] = {};
+            }
+
+            userids.forEach(function(userid) {
+                var chk = {};
+                for (var c in chunks) {
+                    chk[c] = chunks[c];
+                }
+
+                var blob = new Blob([chk.file], {
+                    type: chk.file.type
+                });
+
+                for (var prop in chk.file) {
+                    if (!blob[prop]) {
+                        blob[prop] = chk.file[prop];
+                    }
+                }
+
+                fileBufferReader.chunks[fileUUID][userid] = chk;
+                fileBufferReader.chunks[fileUUID][userid].file = blob;
+            });
+        };
+
+        fileBufferReader.getNextChunk = function(uuid, callback, specificUser) {
+            if (!uuid) {
                 console.error('"uuid" is missing.');
                 return;
             }
-            
+
             var chunks = fileBufferReader.chunks[uuid];
             if (!chunks) return;
-            
+
+            if (specificUser) {
+                chunks = chunks[specificUser];
+                if (!chunks) return;
+            }
+
             var currentChunk = chunks.listOfChunks[chunks.currentPosition];
-            if(!currentChunk) {
+            if (!currentChunk) {
                 return;
             }
-            
+
             var isLastChunk = currentChunk.end;
 
             FileConverter.ConvertToArrayBuffer(currentChunk, function(buffer) {
                 if (chunks.currentPosition == 0) {
+                    chunks.file.remoteUserId = specificUser || '';
                     fileBufferReader.onBegin(chunks.file);
                 }
 
                 if (isLastChunk) {
+                    chunks.file.remoteUserId = specificUser || '';
                     fileBufferReader.onEnd(chunks.file);
                 }
 
@@ -76,22 +119,28 @@
                     currentPosition: chunks.currentPosition,
                     maxChunks: chunks.maxChunks,
                     uuid: chunks.uuid,
-                    extra: currentChunk.extra
+                    extra: currentChunk.extra,
+                    remoteUserId: specificUser || ''
                 });
-                fileBufferReader.chunks[uuid].currentPosition++;
+
+                if (!specificUser) {
+                    fileBufferReader.chunks[uuid].currentPosition++;
+                    return;
+                }
+                fileBufferReader.chunks[uuid][specificUser].currentPosition++;
             });
         };
-        
+
         fileBufferReader.onBegin = fileBufferReader.onProgress = fileBufferReader.onEnd = function() {};
 
         var receiver = new File.Receiver(fileBufferReader);
 
         fileBufferReader.addChunk = function(chunk, callback) {
-            if(!chunk) {
+            if (!chunk) {
                 console.error('Chunk is missing.');
                 return;
             }
-            
+
             receiver.receive(chunk, function(uuid) {
                 FileConverter.ConvertToArrayBuffer({
                     readyForNextChunk: true,
@@ -99,7 +148,7 @@
                 }, callback);
             });
         };
-        
+
         fileBufferReader.convertToObject = FileConverter.ConvertToObject;
         fileBufferReader.convertToArrayBuffer = FileConverter.ConvertToArrayBuffer;
     };
@@ -121,20 +170,20 @@
             }
 
             file.onchange = function() {
-                if(multiple) {
-                    if(!file.files.length) {
+                if (multiple) {
+                    if (!file.files.length) {
                         console.error('No file selected.');
                         return;
                     }
                     callback(file.files);
                     return;
                 }
-                
-                if(!file.files[0]) {
+
+                if (!file.files[0]) {
                     console.error('No file selected.');
                     return;
                 }
-                
+
                 callback(file.files[0]);
             };
             fireClickEvent(file);
@@ -154,14 +203,14 @@
     var File = {
         Read: function(file, callback, extra) {
             extra = extra || {};
-            
+
             var numOfChunksInSlice;
             var currentPosition = 1;
             var hasEntireFile;
             var listOfChunks = {};
 
             var chunkSize = extra.chunkSize || 60 * 1000; // 64k max sctp limit (AFAIK!)
-            
+
             var sliceId = 0;
             var cacheSize = chunkSize;
 
@@ -223,7 +272,7 @@
             blob = file.slice(sliceId * sliceSize, (sliceId + 1) * sliceSize);
             reader.readAsArrayBuffer(blob);
 
-            function addChunks(fileName, binarySlice, callback) {
+            function addChunks(fileName, binarySlice, callback00) {
                 numOfChunksInSlice = Math.ceil(binarySlice.byteLength / chunkSize);
                 for (var i = 0; i < numOfChunksInSlice; i++) {
                     var start = i * chunkSize;
@@ -242,7 +291,7 @@
                     hasEntireFile = true;
                 }
 
-                callback();
+                callback00();
             }
         },
 
