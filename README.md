@@ -493,7 +493,15 @@ fbr.getNextChunks('file-uuid', function(buffer) {
 
 ## Applications using FileBufferReader
 
-1. [FileBufferReader.js](https://githbu.com/FileBufferReader)
+1. [RTCMultiConnection.js](https://githbu.com/RTCMultiConnection)
+
+## RTCMultiConnection FileBufferReader Demos
+
+1. https://rtcxp.com/fs
+2. https://rtcmulticonnection.herokuapp.com/demos/Audio+Video+TextChat+FileSharing.html
+3. https://rtcmulticonnection.herokuapp.com/demos/TextChat+FileSharing.html
+
+More demos here: https://rtcmulticonnection.herokuapp.com/demos/
 
 ## License
 

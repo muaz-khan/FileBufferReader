@@ -1,5 +1,8 @@
 function FileBufferReceiver(fbr) {
-    var packets = {};
+    var fbReceiver = this;
+
+    fbReceiver.chunks = {};
+    fbReceiver.chunksWaiters = {};
 
     function receive(chunk, callback) {
         if (!chunk.uuid) {
@@ -9,23 +12,23 @@ function FileBufferReceiver(fbr) {
             return;
         }
 
-        if (chunk.start && !packets[chunk.uuid]) {
-            packets[chunk.uuid] = [];
+        if (chunk.start && !fbReceiver.chunks[chunk.uuid]) {
+            fbReceiver.chunks[chunk.uuid] = [];
             if (fbr.onBegin) fbr.onBegin(chunk);
         }
 
         if (!chunk.end && chunk.buffer) {
-            packets[chunk.uuid].push(chunk.buffer);
+            fbReceiver.chunks[chunk.uuid].push(chunk.buffer);
         }
 
         if (chunk.end) {
-            var _packets = packets[chunk.uuid];
+            var chunks = fbReceiver.chunks[chunk.uuid];
             var finalArray = [],
-                length = _packets.length;
+                length = chunks.length;
 
             for (var i = 0; i < length; i++) {
-                if (!!_packets[i]) {
-                    finalArray.push(_packets[i]);
+                if (!!chunks[i]) {
+                    finalArray.push(chunks[i]);
                 }
             }
 
@@ -39,12 +42,39 @@ function FileBufferReceiver(fbr) {
             if (!blob.size) console.error('Something went wrong. Blob Size is 0.');
 
             if (fbr.onEnd) fbr.onEnd(blob);
+
+            // clear system memory
+            delete fbReceiver.chunks[chunk.uuid];
+            delete fbReceiver.chunksWaiters[chunk.uuid];
         }
 
         if (chunk.buffer && fbr.onProgress) fbr.onProgress(chunk);
 
-        if (!chunk.end) callback(chunk.uuid);
+        if (!chunk.end) {
+            callback(chunk);
+
+            fbReceiver.chunksWaiters[chunk.uuid] = function() {
+                function looper() {
+                    if (!chunk.buffer) {
+                        return;
+                    }
+
+                    if (!fbReceiver.chunks[chunk.uuid]) {
+                        return;
+                    }
+
+                    if (chunk.currentPosition != chunk.maxChunks && !fbReceiver.chunks[chunk.uuid][chunk.currentPosition]) {
+                        console.error('checking', chunk.currentPosition, chunk.maxChunks);
+                        callback(chunk);
+                        setTimeout(looper, 5000);
+                    }
+                }
+                setTimeout(looper, 5000);
+            };
+
+            fbReceiver.chunksWaiters[chunk.uuid]();
+        }
     }
 
-    this.receive = receive;
+    fbReceiver.receive = receive;
 }

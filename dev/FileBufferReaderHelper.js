@@ -14,13 +14,20 @@ function FileBufferReaderHelper() {
 
     fbrHelper.readAsArrayBuffer = function(fbr, options) {
         var earlyCallback = options.earlyCallback;
+        var progressCallback = options.progressCallback;
+
         delete options.earlyCallback;
+        delete options.progressCallback;
 
         function processChunk(chunk) {
             if (!fbr.chunks[chunk.uuid]) {
                 fbr.chunks[chunk.uuid] = {
                     currentPosition: -1
                 };
+            }
+
+            if (progressCallback) {
+                progressCallback(chunk);
             }
 
             options.extra = options.extra || {
@@ -36,13 +43,8 @@ function FileBufferReaderHelper() {
                 earlyCallback(chunk.uuid);
                 earlyCallback = null;
             }
-
-            if ((chunk.maxChunks > 5 && chunk.currentPosition == 5) && earlyCallback) {
-                earlyCallback(chunk.uuid);
-                earlyCallback = null;
-            }
         }
-        if (typeof Worker !== 'undefined') {
+        if (false && typeof Worker !== 'undefined') {
             var webWorker = processInWebWorker(fileReaderWrapper);
 
             webWorker.onmessage = function(event) {
@@ -51,13 +53,7 @@ function FileBufferReaderHelper() {
 
             webWorker.postMessage(options);
         } else {
-            var reader = new FileReader();
-            reader.readAsDataURL(options);
-            reader.onload = function(event) {
-                callback(event.target.result);
-            };
-
-            fileReaderWrapper(option, processChunk);
+            fileReaderWrapper(options, processChunk);
         }
     };
 

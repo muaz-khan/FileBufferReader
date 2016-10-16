@@ -5,10 +5,15 @@ function FileBufferReader() {
     fbr.chunks = {};
     fbr.users = {};
 
-    fbr.readAsArrayBuffer = function(file, earlyCallback, extra) {
+    fbr.readAsArrayBuffer = function(file, callback, extra, progressCallback) {
         var options = {
             file: file,
-            earlyCallback: earlyCallback,
+            earlyCallback: function(chunk) {
+                callback(fbrClone(chunk, {
+                    currentPosition: -1
+                }));
+            },
+            progressCallback: progressCallback || function() {},
             extra: extra || {
                 userid: 0
             }
@@ -18,12 +23,17 @@ function FileBufferReader() {
     };
 
     fbr.getNextChunk = function(fileUUID, callback, userid) {
+        var currentPosition;
+
+        if (typeof fileUUID.currentPosition !== 'undefined') {
+            currentPosition = fileUUID.currentPosition;
+            fileUUID = fileUUID.uuid;
+        }
+
         var allFileChunks = fbr.chunks[fileUUID];
         if (!allFileChunks) {
             return;
         }
-
-        var currentPosition;
 
         if (typeof userid !== 'undefined') {
             if (!fbr.users[userid + '']) {
@@ -34,15 +44,31 @@ function FileBufferReader() {
                 };
             }
 
+            if (typeof currentPosition !== 'undefined') {
+                fbr.users[userid + ''].currentPosition = currentPosition;
+            }
+
             fbr.users[userid + ''].currentPosition++;
             currentPosition = fbr.users[userid + ''].currentPosition;
         } else {
+            if (typeof currentPosition !== 'undefined') {
+                fbr.chunks[fileUUID].currentPosition = currentPosition;
+            }
+
             fbr.chunks[fileUUID].currentPosition++;
             currentPosition = fbr.chunks[fileUUID].currentPosition;
         }
 
         var nextChunk = allFileChunks[currentPosition];
-        if (!nextChunk) return;
+        if (!nextChunk) {
+            delete fbr.chunks[fileUUID];
+            fbr.convertToArrayBuffer({
+                chunkMissing: true,
+                currentPosition: currentPosition,
+                uuid: fileUUID
+            }, callback);
+            return;
+        }
 
         nextChunk = fbrClone(nextChunk);
 
@@ -74,16 +100,21 @@ function FileBufferReader() {
 
     fbr.addChunk = function(chunk, callback) {
         if (!chunk) {
-            console.error('Chunk is missing.');
             return;
         }
 
-        fbReceiver.receive(chunk, function(uuid) {
+        fbReceiver.receive(chunk, function(chunk) {
             fbr.convertToArrayBuffer({
                 readyForNextChunk: true,
-                uuid: uuid
+                currentPosition: chunk.currentPosition,
+                uuid: chunk.uuid
             }, callback);
         });
+    };
+
+    fbr.chunkMissing = function(chunk) {
+        delete fbReceiver.chunks[chunk.uuid];
+        delete fbReceiver.chunksWaiters[chunk.uuid];
     };
 
     fbr.onBegin = function() {};

@@ -12,6 +12,11 @@ window.addEventListener('load', function() {
     var SIGNALING_URI = 'wss://webrtc-signaling.herokuapp.com:443/ws/';
 
     var channel = location.href.replace(/\/|:|#|%|\.|\[|\]/g, '');
+
+    if (location.hash && location.hash.length > 2) {
+        channel = location.hash.replace('#', '');
+    }
+
     var websocket = new WebSocket(SIGNALING_URI);
     websocket.onopen = function() {
         var innerHTML = '<span>Setup</span> <span>WebRTC Connection</span>';
@@ -71,7 +76,7 @@ window.addEventListener('load', function() {
         onBegin: function(file) {
             var li = document.createElement('li');
             li.title = file.name;
-            li.innerHTML = '<label>0%</label> <progress></progress>';
+            li.innerHTML = file.name + '<br><label>0%</label> <progress></progress>';
             outputPanel.insertBefore(li, outputPanel.firstChild);
             progressHelper[file.uuid] = {
                 li: li,
@@ -79,14 +84,30 @@ window.addEventListener('load', function() {
                 label: li.querySelector('label')
             };
             progressHelper[file.uuid].progress.max = file.maxChunks;
+
+            btnSelectFile.disabled = true;
         },
         onEnd: function(file) {
             previewFile(file);
+
+            btnSelectFile.innerHTML = 'Select & Share A File';
+            btnSelectFile.disabled = false;
         },
         onProgress: function(chunk) {
             var helper = progressHelper[chunk.uuid];
             helper.progress.value = chunk.currentPosition || chunk.maxChunks || helper.progress.max;
             updateLabel(helper.progress, helper.label);
+
+            if (chunk.currentPosition + 1 != chunk.maxChunks) {
+                if (fileSelector.lastSelectedFile) {
+                    btnSelectFile.innerHTML = 'Sending file chunks: ' + chunk.maxChunks + '/' + chunk.currentPosition;
+                } else {
+                    btnSelectFile.innerHTML = 'Receiving file chunks: ' + chunk.maxChunks + '/' + chunk.currentPosition;
+                }
+            } else {
+                btnSelectFile.innerHTML = 'Select & Share A File';
+                btnSelectFile.disabled = false;
+            }
         }
     };
 
@@ -113,10 +134,19 @@ window.addEventListener('load', function() {
 
     peerConnection.onclose = function() {
         onCloseOrOnError('<span>PeerConnection</span> <span>is closed.</span>');
+        resetButtons();
     };
+
+    function resetButtons() {
+        btnSelectFile.innerHTML = 'Select & Share A File';
+        btnSelectFile.disabled = true;
+        setupOffer.disabled = false;
+        setupOffer.innerHTML = 'Setup WebRTC Connection';
+    }
 
     peerConnection.onerror = function() {
         onCloseOrOnError('<span>Something</span> <span>went wrong.</span>');
+        resetButtons();
     };
 
     // getNextChunkCallback gets next available buffer
@@ -143,8 +173,12 @@ window.addEventListener('load', function() {
 
         // if target user requested next chunk
         if (chunk.readyForNextChunk) {
-            fileBufferReader.getNextChunk(chunk.uuid, getNextChunkCallback);
+            fileBufferReader.getNextChunk(chunk /*aka metadata*/ , getNextChunkCallback);
             return;
+        }
+
+        if (chunk.chunkMissing) {
+            fileBufferReader.chunkMissing(chunk);
         }
 
         // if chunk is received
@@ -169,11 +203,20 @@ window.addEventListener('load', function() {
         btnSelectFile.disabled = true;
         fileSelector.selectSingleFile(function(file) {
             fileSelector.lastSelectedFile = file;
-            fileBufferReader.readAsArrayBuffer(file, function(uuid) {
-                fileBufferReader.getNextChunk(uuid, getNextChunkCallback);
-                btnSelectFile.disabled = false;
+
+            btnSelectFile.innerHTML = 'Converting file into chunks..';
+            fileBufferReader.readAsArrayBuffer(file, function(metadata) {
+                fileBufferReader.getNextChunk(metadata, getNextChunkCallback);
+            }, null, function(progress) {
+                btnSelectFile.innerHTML = 'Converting file into chunks: ' + progress.maxChunks + '/' + progress.currentPosition;
             });
         });
+
+        setTimeout(function() {
+            if (fileSelector.lastSelectedFile) return;
+            btnSelectFile.innerHTML = 'Select & Share A File';
+            btnSelectFile.disabled = false;
+        }, 5000);
     };
 
     // --------------------------------------------------------
@@ -212,7 +255,7 @@ window.addEventListener('load', function() {
             setupOffer.disabled = false;
         }, 1000);
 
-        document.querySelector('input[type=file]').disabled = true;
+        document.getElementById('select-file').disabled = true;
     }
 
     function getToken() {

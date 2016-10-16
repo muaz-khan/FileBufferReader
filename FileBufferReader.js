@@ -1,4 +1,4 @@
-// Last time updated: 2016-10-15 4:39:36 AM UTC
+// Last time updated: 2016-10-16 8:23:17 AM UTC
 
 // ________________
 // FileBufferReader
@@ -21,10 +21,15 @@
         fbr.chunks = {};
         fbr.users = {};
 
-        fbr.readAsArrayBuffer = function(file, earlyCallback, extra) {
+        fbr.readAsArrayBuffer = function(file, callback, extra, progressCallback) {
             var options = {
                 file: file,
-                earlyCallback: earlyCallback,
+                earlyCallback: function(chunk) {
+                    callback(fbrClone(chunk, {
+                        currentPosition: -1
+                    }));
+                },
+                progressCallback: progressCallback || function() {},
                 extra: extra || {
                     userid: 0
                 }
@@ -34,12 +39,17 @@
         };
 
         fbr.getNextChunk = function(fileUUID, callback, userid) {
+            var currentPosition;
+
+            if (typeof fileUUID.currentPosition !== 'undefined') {
+                currentPosition = fileUUID.currentPosition;
+                fileUUID = fileUUID.uuid;
+            }
+
             var allFileChunks = fbr.chunks[fileUUID];
             if (!allFileChunks) {
                 return;
             }
-
-            var currentPosition;
 
             if (typeof userid !== 'undefined') {
                 if (!fbr.users[userid + '']) {
@@ -50,15 +60,31 @@
                     };
                 }
 
+                if (typeof currentPosition !== 'undefined') {
+                    fbr.users[userid + ''].currentPosition = currentPosition;
+                }
+
                 fbr.users[userid + ''].currentPosition++;
                 currentPosition = fbr.users[userid + ''].currentPosition;
             } else {
+                if (typeof currentPosition !== 'undefined') {
+                    fbr.chunks[fileUUID].currentPosition = currentPosition;
+                }
+
                 fbr.chunks[fileUUID].currentPosition++;
                 currentPosition = fbr.chunks[fileUUID].currentPosition;
             }
 
             var nextChunk = allFileChunks[currentPosition];
-            if (!nextChunk) return;
+            if (!nextChunk) {
+                delete fbr.chunks[fileUUID];
+                fbr.convertToArrayBuffer({
+                    chunkMissing: true,
+                    currentPosition: currentPosition,
+                    uuid: fileUUID
+                }, callback);
+                return;
+            }
 
             nextChunk = fbrClone(nextChunk);
 
@@ -90,16 +116,21 @@
 
         fbr.addChunk = function(chunk, callback) {
             if (!chunk) {
-                console.error('Chunk is missing.');
                 return;
             }
 
-            fbReceiver.receive(chunk, function(uuid) {
+            fbReceiver.receive(chunk, function(chunk) {
                 fbr.convertToArrayBuffer({
                     readyForNextChunk: true,
-                    uuid: uuid
+                    currentPosition: chunk.currentPosition,
+                    uuid: chunk.uuid
                 }, callback);
             });
+        };
+
+        fbr.chunkMissing = function(chunk) {
+            delete fbReceiver.chunks[chunk.uuid];
+            delete fbReceiver.chunksWaiters[chunk.uuid];
         };
 
         fbr.onBegin = function() {};
@@ -146,13 +177,20 @@
 
         fbrHelper.readAsArrayBuffer = function(fbr, options) {
             var earlyCallback = options.earlyCallback;
+            var progressCallback = options.progressCallback;
+
             delete options.earlyCallback;
+            delete options.progressCallback;
 
             function processChunk(chunk) {
                 if (!fbr.chunks[chunk.uuid]) {
                     fbr.chunks[chunk.uuid] = {
                         currentPosition: -1
                     };
+                }
+
+                if (progressCallback) {
+                    progressCallback(chunk);
                 }
 
                 options.extra = options.extra || {
@@ -168,13 +206,8 @@
                     earlyCallback(chunk.uuid);
                     earlyCallback = null;
                 }
-
-                if ((chunk.maxChunks > 5 && chunk.currentPosition == 5) && earlyCallback) {
-                    earlyCallback(chunk.uuid);
-                    earlyCallback = null;
-                }
             }
-            if (typeof Worker !== 'undefined') {
+            if (false && typeof Worker !== 'undefined') {
                 var webWorker = processInWebWorker(fileReaderWrapper);
 
                 webWorker.onmessage = function(event) {
@@ -183,13 +216,7 @@
 
                 webWorker.postMessage(options);
             } else {
-                var reader = new FileReader();
-                reader.readAsDataURL(options);
-                reader.onload = function(event) {
-                    callback(event.target.result);
-                };
-
-                fileReaderWrapper(option, processChunk);
+                fileReaderWrapper(options, processChunk);
             }
         };
 
@@ -350,7 +377,10 @@
     }
 
     function FileBufferReceiver(fbr) {
-        var packets = {};
+        var fbReceiver = this;
+
+        fbReceiver.chunks = {};
+        fbReceiver.chunksWaiters = {};
 
         function receive(chunk, callback) {
             if (!chunk.uuid) {
@@ -360,23 +390,23 @@
                 return;
             }
 
-            if (chunk.start && !packets[chunk.uuid]) {
-                packets[chunk.uuid] = [];
+            if (chunk.start && !fbReceiver.chunks[chunk.uuid]) {
+                fbReceiver.chunks[chunk.uuid] = [];
                 if (fbr.onBegin) fbr.onBegin(chunk);
             }
 
             if (!chunk.end && chunk.buffer) {
-                packets[chunk.uuid].push(chunk.buffer);
+                fbReceiver.chunks[chunk.uuid].push(chunk.buffer);
             }
 
             if (chunk.end) {
-                var _packets = packets[chunk.uuid];
+                var chunks = fbReceiver.chunks[chunk.uuid];
                 var finalArray = [],
-                    length = _packets.length;
+                    length = chunks.length;
 
                 for (var i = 0; i < length; i++) {
-                    if (!!_packets[i]) {
-                        finalArray.push(_packets[i]);
+                    if (!!chunks[i]) {
+                        finalArray.push(chunks[i]);
                     }
                 }
 
@@ -390,14 +420,41 @@
                 if (!blob.size) console.error('Something went wrong. Blob Size is 0.');
 
                 if (fbr.onEnd) fbr.onEnd(blob);
+
+                // clear system memory
+                delete fbReceiver.chunks[chunk.uuid];
+                delete fbReceiver.chunksWaiters[chunk.uuid];
             }
 
             if (chunk.buffer && fbr.onProgress) fbr.onProgress(chunk);
 
-            if (!chunk.end) callback(chunk.uuid);
+            if (!chunk.end) {
+                callback(chunk);
+
+                fbReceiver.chunksWaiters[chunk.uuid] = function() {
+                    function looper() {
+                        if (!chunk.buffer) {
+                            return;
+                        }
+
+                        if (!fbReceiver.chunks[chunk.uuid]) {
+                            return;
+                        }
+
+                        if (chunk.currentPosition != chunk.maxChunks && !fbReceiver.chunks[chunk.uuid][chunk.currentPosition]) {
+                            console.error('checking', chunk.currentPosition, chunk.maxChunks);
+                            callback(chunk);
+                            setTimeout(looper, 5000);
+                        }
+                    }
+                    setTimeout(looper, 5000);
+                };
+
+                fbReceiver.chunksWaiters[chunk.uuid]();
+            }
         }
 
-        this.receive = receive;
+        fbReceiver.receive = receive;
     }
 
     var FileConverter = {
