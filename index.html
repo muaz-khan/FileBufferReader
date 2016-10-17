@@ -12,6 +12,12 @@
     <meta name="description" content="Peer-to-Peer file sharing using FileBufferReader.js and WebRTC!" />
     <meta name="keywords" content="FileSharing,File,Sharing,Peer-to-Peer,Peer2Peer,P2P,JavaScript,WebRTC,Demos,Experiments,Samples,Examples" />
 
+    <script>
+        if(!location.hash.replace('#', '').length) {
+            location.href = location.href.split('#')[0] + '#' + (Math.random() * 100).toString().replace('.', '');
+            location.reload();
+        }
+    </script>
 
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <meta charset="utf-8">
@@ -122,6 +128,11 @@
           width: 100%;
           overflow: hidden;
         }
+
+        button {
+          text-align: center;
+          display: inline-block;
+        }
     </style>
     <!-- for HTML5 el styling -->
     <script>
@@ -132,6 +143,8 @@
     <script src="FileBufferReader.js"></script>
     <script src="demo/PeerConnection.js"> </script>
     <script src="demo/PeerUI.js"></script>
+
+    <link rel="stylesheet" href="demo/circular-progress-bar.css">
 </head>
 
 <body>
@@ -212,7 +225,7 @@
     </footer>
 
     <script>
-        window.useThisGithubPath = 'muaz-khan/FileBufferReader';
+      window.useThisGithubPath = 'muaz-khan/FileBufferReader';
     </script>
     <script src="https://cdn.webrtc-experiment.com/commits.js"></script>
 </body>

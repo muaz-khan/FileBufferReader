@@ -1,4 +1,4 @@
-// Last time updated: 2016-10-16 8:23:17 AM UTC
+// Last time updated: 2016-10-17 7:50:00 AM UTC
 
 // ________________
 // FileBufferReader
@@ -391,26 +391,22 @@
             }
 
             if (chunk.start && !fbReceiver.chunks[chunk.uuid]) {
-                fbReceiver.chunks[chunk.uuid] = [];
+                fbReceiver.chunks[chunk.uuid] = {};
                 if (fbr.onBegin) fbr.onBegin(chunk);
             }
 
             if (!chunk.end && chunk.buffer) {
-                fbReceiver.chunks[chunk.uuid].push(chunk.buffer);
+                fbReceiver.chunks[chunk.uuid][chunk.currentPosition] = chunk.buffer;
             }
 
             if (chunk.end) {
-                var chunks = fbReceiver.chunks[chunk.uuid];
-                var finalArray = [],
-                    length = chunks.length;
+                var chunksObject = fbReceiver.chunks[chunk.uuid];
+                var chunksArray = [];
+                Object.keys(chunksObject).forEach(function(item, idx) {
+                    chunksArray.push(chunksObject[item]);
+                });
 
-                for (var i = 0; i < length; i++) {
-                    if (!!chunks[i]) {
-                        finalArray.push(chunks[i]);
-                    }
-                }
-
-                var blob = new Blob(finalArray, {
+                var blob = new Blob(chunksArray, {
                     type: chunk.type
                 });
                 blob = merge(blob, chunk);
@@ -442,7 +438,6 @@
                         }
 
                         if (chunk.currentPosition != chunk.maxChunks && !fbReceiver.chunks[chunk.uuid][chunk.currentPosition]) {
-                            console.error('checking', chunk.currentPosition, chunk.maxChunks);
                             callback(chunk);
                             setTimeout(looper, 5000);
                         }

@@ -76,7 +76,8 @@ window.addEventListener('load', function() {
         onBegin: function(file) {
             var li = document.createElement('li');
             li.title = file.name;
-            li.innerHTML = file.name + '<br><label>0%</label> <progress></progress>';
+            li.innerHTML = '<section style="text-align:center;" class="file-name specific-h2">' + file.name + '</section><br><progress style="display:none;" value="0"></progress><div class="circular-progress-bar c100 p25" style="margin-left: 40%;"><span class="circular-progress-bar-percentage">25%</span><div class="slice"><div class="bar"></div><div class="fill"></div></div></div>';
+            li.style['min-height'] = '350px';
             outputPanel.insertBefore(li, outputPanel.firstChild);
             progressHelper[file.uuid] = {
                 li: li,
@@ -86,6 +87,14 @@ window.addEventListener('load', function() {
             progressHelper[file.uuid].progress.max = file.maxChunks;
 
             btnSelectFile.disabled = true;
+
+            if (fileSelector.lastSelectedFile) {
+                btnSelectFile.innerHTML = 'File Sending In-Progress...';
+            } else {
+                btnSelectFile.innerHTML = 'File Receiving In-Progress...';
+            }
+
+            resetTimeCalculator();
         },
         onEnd: function(file) {
             previewFile(file);
@@ -96,14 +105,23 @@ window.addEventListener('load', function() {
         onProgress: function(chunk) {
             var helper = progressHelper[chunk.uuid];
             helper.progress.value = chunk.currentPosition || chunk.maxChunks || helper.progress.max;
-            updateLabel(helper.progress, helper.label);
 
-            if (chunk.currentPosition + 1 != chunk.maxChunks) {
-                if (fileSelector.lastSelectedFile) {
-                    btnSelectFile.innerHTML = 'Sending file chunks: ' + chunk.maxChunks + '/' + chunk.currentPosition;
-                } else {
-                    btnSelectFile.innerHTML = 'Receiving file chunks: ' + chunk.maxChunks + '/' + chunk.currentPosition;
-                }
+            if (helper.progress.position > 0 && helper.li.querySelector('.circular-progress-bar-percentage')) {
+                var position = +helper.progress.position.toFixed(2).split('.')[1] || 100;
+                helper.li.querySelector('.circular-progress-bar-percentage').innerHTML = position + '%';
+                helper.li.querySelector('.circular-progress-bar').className = 'circular-progress-bar c100 p' + position;
+            }
+
+            if (chunk.currentPosition + 2 != chunk.maxChunks && helper.li.querySelector('.file-name')) {
+                progressHelper[chunk.uuid].lastChunk = chunk;
+                timeCalculator(helper.progress, function(timeRemaining) {
+                    var lastChunk = progressHelper[chunk.uuid].lastChunk;
+
+                    var html = (fileSelector.lastSelectedFile ? 'Sending' : 'Receiving') + ' file &lt;' + lastChunk.name + '&gt;:';
+                    html += '<br>Remaining chunks: ' + (lastChunk.maxChunks - lastChunk.currentPosition);
+                    html += '<br>Remaining time: ' + timeRemaining;
+                    helper.li.querySelector('.file-name').innerHTML = html;
+                });
             } else {
                 btnSelectFile.innerHTML = 'Select & Share A File';
                 btnSelectFile.disabled = false;
@@ -188,6 +206,47 @@ window.addEventListener('load', function() {
         });
     };
 
+    var progressIterations = 0;
+    var calculateInProgress = false;
+    var ONE_SECOND = 1000;
+
+    function resetTimeCalculator() {
+        progressIterations = 0;
+        calculateInProgress = false;
+    }
+
+    // https://github.com/23/resumable.js/issues/168#issuecomment-65297110
+    function timeCalculator(progress, callback, selfInvoker) {
+        if (calculateInProgress && !selfInvoker) {
+            return;
+        }
+        calculateInProgress = true;
+
+        var step = 1;
+
+        var remainingProgress = 1.0 - progress.position;
+
+        var estimatedCompletionTime = Math.round((remainingProgress / progress.position) * progressIterations);
+        var estimatedHours, estimatedMinutes, estimatedSeconds, displayHours, displayMinutes, displaySeconds;
+        progressIterations += step;
+
+        if (progress.position < 1.0) {
+            if (isFinite(estimatedCompletionTime)) {
+                estimatedHours = Math.floor(estimatedCompletionTime / 3600);
+                displayHours = estimatedHours > 9 ? estimatedHours : '0' + estimatedHours;
+                estimatedMinutes = Math.floor((estimatedCompletionTime / 60) % 60);
+                displayMinutes = estimatedMinutes > 9 ? estimatedMinutes : '0' + estimatedMinutes;
+                estimatedSeconds = estimatedCompletionTime % 60;
+                displaySeconds = estimatedSeconds > 9 ? estimatedSeconds : '0' + estimatedSeconds;
+            }
+            callback(displayHours + ':' + displayMinutes + ':' + displaySeconds);
+        }
+
+        setTimeout(function() {
+            timeCalculator(progress, callback, true);
+        }, step * ONE_SECOND);
+    }
+
     // -------------------------
     // using FileBufferReader.js
 
@@ -204,11 +263,33 @@ window.addEventListener('load', function() {
         fileSelector.selectSingleFile(function(file) {
             fileSelector.lastSelectedFile = file;
 
-            btnSelectFile.innerHTML = 'Converting file into chunks..';
+            btnSelectFile.innerHTML = '<section style="text-align:center;" class="file-name specific-h2">Converting file &lt;' + file.name + '&gt; into chunks:</section><progress style="display:none;" max="100" value="0"></progress><br><div class="circular-progress-bar c100 p25" style="margin-left: 40%;"><span class="circular-progress-bar-percentage">25%</span><div class="slice"><div class="bar"></div><div class="fill"></div></div></div>';;
+            btnSelectFile.disabled = true;
+
+            resetTimeCalculator();
+
+            var lastChunk;
             fileBufferReader.readAsArrayBuffer(file, function(metadata) {
                 fileBufferReader.getNextChunk(metadata, getNextChunkCallback);
-            }, null, function(progress) {
-                btnSelectFile.innerHTML = 'Converting file into chunks: ' + progress.maxChunks + '/' + progress.currentPosition;
+            }, null, function(chunk) {
+                var progress = btnSelectFile.querySelector('progress');
+                progress.max = chunk.maxChunks;
+                progress.value = chunk.currentPosition || chunk.maxChunks || progress.max;
+
+                lastChunk = chunk;
+
+                timeCalculator(progress, function(timeRemaining) {
+                    var html = 'Converting file &lt;' + lastChunk.name + '&gt; into chunks:';
+                    html += '<br>Remaining chunks: ' + (lastChunk.maxChunks - lastChunk.currentPosition);
+                    html += '<br>Remaining time: ' + timeRemaining;
+                    btnSelectFile.querySelector('.file-name').innerHTML = html;
+                });
+
+                if (progress.position > 0 && btnSelectFile.querySelector('.circular-progress-bar-percentage')) {
+                    var position = +progress.position.toFixed(2).split('.')[1] || 100;
+                    btnSelectFile.querySelector('.circular-progress-bar-percentage').innerHTML = position + '%';
+                    btnSelectFile.querySelector('.circular-progress-bar').className = 'circular-progress-bar c100 p' + position;
+                }
             });
         });
 
@@ -218,14 +299,6 @@ window.addEventListener('load', function() {
             btnSelectFile.disabled = false;
         }, 5000);
     };
-
-    // --------------------------------------------------------
-
-    function updateLabel(progress, label) {
-        if (progress.position == -1) return;
-        var position = +progress.position.toFixed(2).split('.')[1] || 100;
-        label.innerHTML = position + '%';
-    }
 
     // --------------------------------------------------------
     setupOffer.onclick = function() {
