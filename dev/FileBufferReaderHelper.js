@@ -14,20 +14,13 @@ function FileBufferReaderHelper() {
 
     fbrHelper.readAsArrayBuffer = function(fbr, options) {
         var earlyCallback = options.earlyCallback;
-        var progressCallback = options.progressCallback;
-
         delete options.earlyCallback;
-        delete options.progressCallback;
 
         function processChunk(chunk) {
             if (!fbr.chunks[chunk.uuid]) {
                 fbr.chunks[chunk.uuid] = {
                     currentPosition: -1
                 };
-            }
-
-            if (progressCallback) {
-                progressCallback(chunk);
             }
 
             options.extra = options.extra || {
@@ -40,6 +33,12 @@ function FileBufferReaderHelper() {
             fbr.chunks[chunk.uuid][chunk.currentPosition] = chunk;
 
             if (chunk.end && earlyCallback) {
+                earlyCallback(chunk.uuid);
+                earlyCallback = null;
+            }
+
+            // for huge files
+            if ((chunk.maxChunks > 200 && chunk.currentPosition == 200) && earlyCallback) {
                 earlyCallback(chunk.uuid);
                 earlyCallback = null;
             }

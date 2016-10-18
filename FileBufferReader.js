@@ -1,4 +1,4 @@
-// Last time updated: 2016-10-17 7:50:00 AM UTC
+// Last time updated: 2016-10-18 2:34:23 PM UTC
 
 // ________________
 // FileBufferReader
@@ -21,7 +21,7 @@
         fbr.chunks = {};
         fbr.users = {};
 
-        fbr.readAsArrayBuffer = function(file, callback, extra, progressCallback) {
+        fbr.readAsArrayBuffer = function(file, callback, extra) {
             var options = {
                 file: file,
                 earlyCallback: function(chunk) {
@@ -29,7 +29,6 @@
                         currentPosition: -1
                     }));
                 },
-                progressCallback: progressCallback || function() {},
                 extra: extra || {
                     userid: 0
                 }
@@ -177,20 +176,13 @@
 
         fbrHelper.readAsArrayBuffer = function(fbr, options) {
             var earlyCallback = options.earlyCallback;
-            var progressCallback = options.progressCallback;
-
             delete options.earlyCallback;
-            delete options.progressCallback;
 
             function processChunk(chunk) {
                 if (!fbr.chunks[chunk.uuid]) {
                     fbr.chunks[chunk.uuid] = {
                         currentPosition: -1
                     };
-                }
-
-                if (progressCallback) {
-                    progressCallback(chunk);
                 }
 
                 options.extra = options.extra || {
@@ -203,6 +195,12 @@
                 fbr.chunks[chunk.uuid][chunk.currentPosition] = chunk;
 
                 if (chunk.end && earlyCallback) {
+                    earlyCallback(chunk.uuid);
+                    earlyCallback = null;
+                }
+
+                // for huge files
+                if ((chunk.maxChunks > 200 && chunk.currentPosition == 200) && earlyCallback) {
                     earlyCallback(chunk.uuid);
                     earlyCallback = null;
                 }

@@ -5,7 +5,7 @@ function FileBufferReader() {
     fbr.chunks = {};
     fbr.users = {};
 
-    fbr.readAsArrayBuffer = function(file, callback, extra, progressCallback) {
+    fbr.readAsArrayBuffer = function(file, callback, extra) {
         var options = {
             file: file,
             earlyCallback: function(chunk) {
@@ -13,7 +13,6 @@ function FileBufferReader() {
                     currentPosition: -1
                 }));
             },
-            progressCallback: progressCallback || function() {},
             extra: extra || {
                 userid: 0
             }

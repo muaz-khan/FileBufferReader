@@ -195,8 +195,10 @@ window.addEventListener('load', function() {
             return;
         }
 
+        // if any of the chunks missed
         if (chunk.chunkMissing) {
             fileBufferReader.chunkMissing(chunk);
+            return;
         }
 
         // if chunk is received
@@ -263,33 +265,11 @@ window.addEventListener('load', function() {
         fileSelector.selectSingleFile(function(file) {
             fileSelector.lastSelectedFile = file;
 
-            btnSelectFile.innerHTML = '<section style="text-align:center;" class="file-name specific-h2">Converting file &lt;' + file.name + '&gt; into chunks:</section><progress style="display:none;" max="100" value="0"></progress><br><div class="circular-progress-bar c100 p25" style="margin-left: 40%;"><span class="circular-progress-bar-percentage">25%</span><div class="slice"><div class="bar"></div><div class="fill"></div></div></div>';;
+            btnSelectFile.innerHTML = 'Please wait..';;
             btnSelectFile.disabled = true;
 
-            resetTimeCalculator();
-
-            var lastChunk;
             fileBufferReader.readAsArrayBuffer(file, function(metadata) {
                 fileBufferReader.getNextChunk(metadata, getNextChunkCallback);
-            }, null, function(chunk) {
-                var progress = btnSelectFile.querySelector('progress');
-                progress.max = chunk.maxChunks;
-                progress.value = chunk.currentPosition || chunk.maxChunks || progress.max;
-
-                lastChunk = chunk;
-
-                timeCalculator(progress, function(timeRemaining) {
-                    var html = 'Converting file &lt;' + lastChunk.name + '&gt; into chunks:';
-                    html += '<br>Remaining chunks: ' + (lastChunk.maxChunks - lastChunk.currentPosition);
-                    html += '<br>Remaining time: ' + timeRemaining;
-                    btnSelectFile.querySelector('.file-name').innerHTML = html;
-                });
-
-                if (progress.position > 0 && btnSelectFile.querySelector('.circular-progress-bar-percentage')) {
-                    var position = +progress.position.toFixed(2).split('.')[1] || 100;
-                    btnSelectFile.querySelector('.circular-progress-bar-percentage').innerHTML = position + '%';
-                    btnSelectFile.querySelector('.circular-progress-bar').className = 'circular-progress-bar c100 p' + position;
-                }
             });
         });
 
