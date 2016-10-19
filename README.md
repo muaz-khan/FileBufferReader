@@ -88,6 +88,9 @@ You can use `input[type=file].onchange` instead, which is **strongly recommended
 ```javascript
 var fileSelector = new FileSelector();
 
+// *.png, *.jpeg, *.mp4, etc.
+fileSelector.accept = '*.*';
+
 var btnSelectFile = document.getElementById('select-file');
 btnSelectFile.onclick = function() {
     fileSelector.selectSingleFile(function(file) {

@@ -1,4 +1,4 @@
-// Last time updated: 2016-10-18 2:34:23 PM UTC
+// Last time updated: 2016-10-19 12:23:04 PM UTC
 
 // ________________
 // FileBufferReader
@@ -328,6 +328,8 @@
             selectFile(callback, true);
         };
 
+        selector.accept = '*.*';
+
         function selectFile(callback, multiple) {
             var file = document.createElement('input');
             file.type = 'file';
@@ -335,6 +337,8 @@
             if (multiple) {
                 file.multiple = true;
             }
+
+            file.accept = selector.accept;
 
             file.onchange = function() {
                 if (multiple) {

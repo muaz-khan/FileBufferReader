@@ -253,6 +253,11 @@ window.addEventListener('load', function() {
     // using FileBufferReader.js
 
     var fileSelector = new FileSelector();
+
+    // you can force specific files e.g.
+    // image/png, image/*, image/jpeg, video/webm, audio/ogg etc.
+    fileSelector.accept = '*.*';
+
     var fileBufferReader = new FileBufferReader();
 
     fileBufferReader.onBegin = FileHelper.onBegin;

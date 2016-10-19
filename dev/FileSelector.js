@@ -6,6 +6,8 @@ function FileSelector() {
         selectFile(callback, true);
     };
 
+    selector.accept = '*.*';
+
     function selectFile(callback, multiple) {
         var file = document.createElement('input');
         file.type = 'file';
@@ -13,6 +15,8 @@ function FileSelector() {
         if (multiple) {
             file.multiple = true;
         }
+
+        file.accept = selector.accept;
 
         file.onchange = function() {
             if (multiple) {
