@@ -67,6 +67,9 @@ function FileBufferReaderHelper() {
         }
 
         var chunkSize = options.chunkSize || 15 * 1000;
+        if (options.extra && options.extra.chunkSize) {
+            chunkSize = options.extra.chunkSize;
+        }
 
         var sliceId = 0;
         var cacheSize = chunkSize;

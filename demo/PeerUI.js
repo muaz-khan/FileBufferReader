@@ -23,11 +23,19 @@ window.addEventListener('load', function() {
         setupOffer.innerHTML = innerHTML;
         setupOffer.disabled = false;
 
-        console.log('websocket connection opened!');
         websocket.push(JSON.stringify({
             open: true,
             channel: channel
         }));
+
+        setupOffer.onclick();
+
+        var info = document.getElementById('info');
+        if (location.hash.length > 2) {
+            document.getElementById('share-this-link').innerHTML = '<a href="' + location.href + '" target="_blank">Share this link with other users!</a>';
+            info.innerHTML = 'Your UNIQUE room-id is: ' + location.hash.replace('#', '') + '. Open <a href="' + location.href + '" target="_blank">same URL</a> on a new window or tab.';
+            info.style.display = 'block';
+        }
     };
     websocket.push = websocket.send;
     websocket.send = function(data) {
@@ -75,8 +83,7 @@ window.addEventListener('load', function() {
     var FileHelper = {
         onBegin: function(file) {
             var li = document.createElement('li');
-            li.title = file.name;
-            li.innerHTML = '<section style="text-align:center;" class="file-name specific-h2">' + file.name + '</section><br><progress style="display:none;" value="0"></progress><div class="circular-progress-bar c100 p25" style="margin-left: 40%;"><span class="circular-progress-bar-percentage">25%</span><div class="slice"><div class="bar"></div><div class="fill"></div></div></div>';
+            li.innerHTML = '<pre style="text-align:left;" class="file-name">' + file.name + '</pre><br><progress style="display:none;" value="0"></progress><div class="circular-progress-bar c100 p25" style="margin-left: 40%;"><span class="circular-progress-bar-percentage">25%</span><div class="slice"><div class="bar"></div><div class="fill"></div></div></div>';
             li.style['min-height'] = '350px';
             outputPanel.insertBefore(li, outputPanel.firstChild);
             progressHelper[file.uuid] = {
@@ -95,12 +102,19 @@ window.addEventListener('load', function() {
             }
 
             resetTimeCalculator();
+            timeCalculator(progressHelper[file.uuid].progress);
+
+            progressHelper.lastFileUUID = file.uuid;
         },
         onEnd: function(file) {
             previewFile(file);
 
-            btnSelectFile.innerHTML = 'Select & Share A File';
-            btnSelectFile.disabled = false;
+            btnSelectFile.innerHTML = 'Select or Drop a File';
+            if (peerConnection.isOpened) {
+                btnSelectFile.disabled = false;
+            }
+
+            progressHelper.lastFileUUID = null;
         },
         onProgress: function(chunk) {
             var helper = progressHelper[chunk.uuid];
@@ -114,17 +128,36 @@ window.addEventListener('load', function() {
 
             if (chunk.currentPosition + 2 != chunk.maxChunks && helper.li.querySelector('.file-name')) {
                 progressHelper[chunk.uuid].lastChunk = chunk;
-                timeCalculator(helper.progress, function(timeRemaining) {
+                progressHelper.callback = function(timeRemaining) {
                     var lastChunk = progressHelper[chunk.uuid].lastChunk;
 
-                    var html = (fileSelector.lastSelectedFile ? 'Sending' : 'Receiving') + ' file &lt;' + lastChunk.name + '&gt;:';
-                    html += '<br>Remaining chunks: ' + (lastChunk.maxChunks - lastChunk.currentPosition);
-                    html += '<br>Remaining time: ' + timeRemaining;
+                    var singleChunkSize = chunk.size / lastChunk.maxChunks;
+
+                    var html = 'File name: ' + lastChunk.name + ' (File size: ' + bytesToSize(chunk.size) + ')';
+                    html += '<br>Pieces (total/remaining): ' + lastChunk.maxChunks + '/' + lastChunk.currentPosition;
+                    html += ' (Single piece size: ' + bytesToSize(singleChunkSize) + ')';
+
+                    var endedAt = (new Date).getTime();
+                    var timeElapsed = endedAt - (progressHelper.startedAt || (new Date).getTime());
+
+                    progressHelper.latencies.push(timeElapsed);
+                    var avg = calculateAverage(progressHelper.latencies);
+
+                    html += '<br>Latency in millseconds: <span title="' + millsecondsToSeconds(timeElapsed) + ' seconds">' + timeElapsed + '</span> (Average): <span title="' + millsecondsToSeconds(avg) + ' seconds">' + avg + '</span>';
+
+                    var remainingFileSize = singleChunkSize * (lastChunk.maxChunks - lastChunk.currentPosition);
+                    html += '<br>Remaining (time): ' + timeRemaining + ' (Remaining file size): ' + bytesToSize(remainingFileSize);
+
                     helper.li.querySelector('.file-name').innerHTML = html;
-                });
+
+                    progressHelper.startedAt = (new Date).getTime();
+                };
             } else {
-                btnSelectFile.innerHTML = 'Select & Share A File';
-                btnSelectFile.disabled = false;
+                btnSelectFile.innerHTML = 'Select or Drop a File';
+
+                if (peerConnection.isOpened) {
+                    btnSelectFile.disabled = false;
+                }
             }
         }
     };
@@ -134,7 +167,7 @@ window.addEventListener('load', function() {
     var peerConnection = new PeerConnection(websocket);
 
     peerConnection.onuserfound = function(userid) {
-        setupOffer.innerHTML = 'Please wait a few seconds.';
+        setupOffer.innerHTML = 'Detecting other users...';
         setupOffer.disabled = true;
 
         peerConnection.sendParticipationRequest(userid);
@@ -148,16 +181,26 @@ window.addEventListener('load', function() {
         setupOffer.disabled = true;
 
         btnSelectFile.disabled = false;
+        btnSelectFile.innerHTML = 'Select or Drop a File';
     };
 
     peerConnection.onclose = function() {
         onCloseOrOnError('<span>PeerConnection</span> <span>is closed.</span>');
         resetButtons();
+
+        peerConnection.isOpened = false;
+
+        var helper = progressHelper[progressHelper.lastFileUUID];
+        if (helper && helper.li && helper.li.parentNode) {
+            isStoppedTimer = true;
+            helper.li.parentNode.removeChild(helper.li);
+        }
     };
 
     function resetButtons() {
-        btnSelectFile.innerHTML = 'Select & Share A File';
+        btnSelectFile.innerHTML = 'Select or Drop a File';
         btnSelectFile.disabled = true;
+
         setupOffer.disabled = false;
         setupOffer.innerHTML = 'Setup WebRTC Connection';
     }
@@ -209,20 +252,30 @@ window.addEventListener('load', function() {
     };
 
     var progressIterations = 0;
-    var calculateInProgress = false;
     var ONE_SECOND = 1000;
 
     function resetTimeCalculator() {
         progressIterations = 0;
-        calculateInProgress = false;
+        isStoppedTimer = false;
+        progressHelper.callback = function() {};
+        progressHelper.latencies = [];
     }
 
-    // https://github.com/23/resumable.js/issues/168#issuecomment-65297110
-    function timeCalculator(progress, callback, selfInvoker) {
-        if (calculateInProgress && !selfInvoker) {
-            return;
+    function calculateAverage(arr) {
+        var sum = 0;
+        for (var i = 0; i < arr.length; i++) {
+            sum += parseInt(arr[i], 10); //don't forget to add the base
         }
-        calculateInProgress = true;
+
+        var avg = sum / arr.length;
+        return avg.toFixed(1);
+    }
+
+    var isStoppedTimer = false;
+
+    // https://github.com/23/resumable.js/issues/168#issuecomment-65297110
+    function timeCalculator(progress, selfInvoker) {
+        if (isStoppedTimer) return;
 
         var step = 1;
 
@@ -241,11 +294,24 @@ window.addEventListener('load', function() {
                 estimatedSeconds = estimatedCompletionTime % 60;
                 displaySeconds = estimatedSeconds > 9 ? estimatedSeconds : '0' + estimatedSeconds;
             }
-            callback(displayHours + ':' + displayMinutes + ':' + displaySeconds);
+
+            var output = '';
+            if (displayHours > 0) {
+                output += displayHours + ' hours ';
+            }
+            if (displayMinutes > 0) {
+                output += displayMinutes + ' minutes ';
+            }
+            if (displaySeconds > 0) {
+                output += displaySeconds + ' seconds ';
+            }
+            if (output.length) {
+                progressHelper.callback(output);
+            }
         }
 
         setTimeout(function() {
-            timeCalculator(progress, callback, true);
+            timeCalculator(progress, true);
         }, step * ONE_SECOND);
     }
 
@@ -260,43 +326,121 @@ window.addEventListener('load', function() {
 
     var fileBufferReader = new FileBufferReader();
 
+    fileBufferReader.chunkSize = 60 * 1000; // 60k
+
     fileBufferReader.onBegin = FileHelper.onBegin;
     fileBufferReader.onProgress = FileHelper.onProgress;
     fileBufferReader.onEnd = FileHelper.onEnd;
+
+    function onFileSelected(file) {
+        fileSelector.lastSelectedFile = file;
+
+        btnSelectFile.innerHTML = 'Please wait..';;
+        btnSelectFile.disabled = true;
+
+        fileBufferReader.readAsArrayBuffer(file, function(metadata) {
+            fileBufferReader.getNextChunk(metadata, getNextChunkCallback);
+        }, {
+            chunkSize: fileBufferReader.chunkSize
+        });
+
+        setTimeout(function() {
+            if (fileSelector.lastSelectedFile) return;
+            btnSelectFile.innerHTML = 'Select or Drop a File';
+            btnSelectFile.disabled = false;
+        }, 5000);
+    }
 
     var btnSelectFile = document.getElementById('select-file');
     btnSelectFile.onclick = function() {
         btnSelectFile.disabled = true;
         fileSelector.selectSingleFile(function(file) {
-            fileSelector.lastSelectedFile = file;
-
-            btnSelectFile.innerHTML = 'Please wait..';;
-            btnSelectFile.disabled = true;
-
-            fileBufferReader.readAsArrayBuffer(file, function(metadata) {
-                fileBufferReader.getNextChunk(metadata, getNextChunkCallback);
-            });
+            onFileSelected(file);
         });
-
-        setTimeout(function() {
-            if (fileSelector.lastSelectedFile) return;
-            btnSelectFile.innerHTML = 'Select & Share A File';
-            btnSelectFile.disabled = false;
-        }, 5000);
     };
 
-    // --------------------------------------------------------
-    setupOffer.onclick = function() {
-        setupOffer.innerHTML = 'Please wait a few seconds.';
-        setupOffer.disabled = true;
+    // drag-drop support
+    function onDragOver() {
+        mainContainer.style.border = '7px solid #98a90f';
+        mainContainer.style.background = '#ffff13';
+        mainContainer.style.borderRadisu = '16px';
+    }
 
-        // start broadcasting userid
-        peerConnection.startBroadcasting();
+    function onDragLeave() {
+        mainContainer.style.border = '1px solid rgb(189, 189, 189)';
+        mainContainer.style.background = 'transparent';
+        mainContainer.style.borderRadisu = 0;
+    }
+
+    var mainContainer = document.getElementById('main-container');
+    document.addEventListener('dragenter', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!peerConnection || !peerConnection.isOpened) return;
+
+        e.dataTransfer.dropEffect = 'copy';
+        onDragOver();
+    }, false);
+
+    document.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!peerConnection || !peerConnection.isOpened) return;
+
+        e.dataTransfer.dropEffect = 'copy';
+        onDragLeave();
+    }, false);
+
+    document.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!peerConnection || !peerConnection.isOpened) return;
+
+        e.dataTransfer.dropEffect = 'copy';
+        onDragOver();
+    }, false);
+
+    document.addEventListener('drop', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!peerConnection || !peerConnection.isOpened) return;
+
+        onDragLeave();
+
+        if (!e.dataTransfer.files || !e.dataTransfer.files.length) {
+            return;
+        }
+
+        var file = e.dataTransfer.files[0];
+
+        if (!peerConnection || !peerConnection.isOpened) {
+            alert('Pleas setup WebRTC connection before sharing this file.');
+            return;
+        }
+
+        onFileSelected(file);
+    }, false);
+
+    // --------------------------------------------------------
+    setupOffer.onclick = function(event) {
+        if (event !== true) {
+            peerConnection.startBroadcasting();
+        }
+
+        setupOffer.innerHTML = 'Detecting other users in this room...';
+        setupOffer.disabled = true;
 
         setTimeout(function() {
             if (!peerConnection.isOpened) {
-                var innerHTML = 'Open Same URL in a NEW Tab';
+                var innerHTML = 'I am alone in this room.';
                 setupOffer.innerHTML = innerHTML;
+                setTimeout(function() {
+                    setupOffer.onclick(true);
+                }, 2000);
             }
         }, 5 * 1000);
     };
@@ -316,6 +460,21 @@ window.addEventListener('load', function() {
         document.getElementById('select-file').disabled = true;
     }
 
+    function millsecondsToSeconds(millis) {
+        var seconds = ((millis % 60000) / 1000).toFixed(1);
+        return seconds;
+    }
+
+    function bytesToSize(bytes) {
+        var k = 1000;
+        var sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+        if (bytes === 0) {
+            return '0 Bytes';
+        }
+        var i = parseInt(Math.floor(Math.log(bytes) / Math.log(k)), 10);
+        return (bytes / Math.pow(k, i)).toPrecision(3) + ' ' + sizes[i];
+    }
+
     function getToken() {
         if (window.crypto && window.crypto.getRandomValues && navigator.userAgent.indexOf('Safari') === -1) {
             var a = window.crypto.getRandomValues(new Uint32Array(3)),
@@ -328,12 +487,4 @@ window.addEventListener('load', function() {
             return (Math.random() * new Date().getTime()).toString(36).replace(/\./g, '');
         }
     }
-
-    var uniqueToken = document.getElementById('unique-token');
-    if (uniqueToken)
-        if (location.hash.length > 2)
-            uniqueToken.parentNode.parentNode.innerHTML = '<h2 style="text-align:center;"><a href="' + location.href + '" target="_blank">Share this Link!</a></h2>';
-        else
-            uniqueToken.innerHTML = uniqueToken.parentNode.href = '#' + getToken();
-
 }, false);

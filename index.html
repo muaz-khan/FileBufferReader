@@ -110,7 +110,6 @@
           border:0;
           padding: 0;
           outline: none;
-          min-height: 350px;
         }
 
         video {
@@ -133,6 +132,12 @@
           text-align: center;
           display: inline-block;
         }
+
+        pre {
+          border: 0;
+          margin-left: 0;
+          font-size: 14px;
+        }
     </style>
     <!-- for HTML5 el styling -->
     <script>
@@ -140,11 +145,11 @@
         document.createElement('footer');
     </script>
 
-    <script src="https://cdn.webrtc-experiment.com/FileBufferReader.js"></script>
-    <script src="https://cdn.webrtc-experiment.com/FileBufferReader/demo/PeerConnection.js"> </script>
-    <script src="https://cdn.webrtc-experiment.com/FileBufferReader/demo/PeerUI.js"></script>
+    <script src="FileBufferReader.js"></script>
+    <script src="demo/PeerConnection.js"> </script>
+    <script src="demo/PeerUI.js"></script>
 
-    <link rel="stylesheet" href="https://cdn.webrtc-experiment.com/FileBufferReader/demo/circular-progress-bar.css">
+    <link rel="stylesheet" href="demo/circular-progress-bar.css">
 </head>
 
 <body>
@@ -174,14 +179,17 @@
             <a href="https://www.youtube.com/watch?v=gv8xpdGdS4o" target="_blank">Watch a YouTube video</a> to understand how it works.
         </blockquote>
 
-        <section class="experiment">
-          <h2 class="specific-h2"><a id="demo" href="#demo">Demo</a> (Open 2-similar tabs)</h2>
+        <section id="main-container" class="experiment">
+          <h2 class="specific-h2"><a id="demo" href="#demo">FileBufferReader Demo</a></h2>
 
           <div style="text-align:center;">
             <br>
             <button class="button" id="setup-offer" disabled="">
                 <span>Connecting</span> <span>Signaling Socket..</span>
             </button>
+
+            <br>
+            <span id="share-this-link"></span>
             <br><br>
 
             <button id="select-file" disabled style="font-size: 2em;">Select & Share A File</button>
@@ -189,13 +197,7 @@
 
           <ol class="output-panel"></ol>
 
-          <blockquote>
-            Want to share files privately? &rarr;
-
-            <a href="#" target="_blank" title="Open this link in new tab to share files privately!">
-                <strong id="unique-token" style="cursor:pointer;">#</strong>
-            </a>
-          </blockquote>
+          <blockquote id="info" style="display:none;"></blockquote>
         </section>
 
         <section class="experiment own-widgets">

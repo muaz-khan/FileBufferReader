@@ -251,14 +251,45 @@
         username: 'muazkh'
     });
 
+    iceServers.push({
+        urls: 'turn:webrtcweb.com:3344',
+        credential: 'muazkh',
+        username: 'muazkh'
+    });
+
+    iceServers.push({
+        urls: 'turn:webrtcweb.com:4433',
+        credential: 'muazkh',
+        username: 'muazkh'
+    });
+
     iceServers = {
-        iceServers: iceServers
+        iceServers: iceServers,
+        iceTransportPolicy: 'all',
+        rtcpMuxPolicy: 'negotiate'
     };
 
     var optionalArgument = {
         optional: [{
             DtlsSrtpKeyAgreement: true
-        }]
+        }, {
+            googImprovedWifiBwe: true
+        }, {
+            googScreencastMinBitrate: 300
+        }, {
+            googIPv6: true
+        }, {
+            googDscp: true
+        }, {
+            googCpuUnderuseThreshold: 55
+        }, {
+            googCpuOveruseThreshold: 85
+        }, {
+            googSuspendBelowMinBitrate: true
+        }, {
+            googCpuOveruseDetection: true
+        }],
+        mandatory: {}
     };
 
     var offerAnswerConstraints = {
@@ -292,12 +323,10 @@
         };
 
         channel.onerror = function(e) {
-            console.error('channel.onerror', JSON.stringify(e, null, '\t'));
             config.onerror(e);
         };
 
         channel.onclose = function(e) {
-            console.warn('channel.onclose', JSON.stringify(e, null, '\t'));
             config.onclose(e);
         };
     }
