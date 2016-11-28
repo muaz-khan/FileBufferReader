@@ -28,8 +28,6 @@ window.addEventListener('load', function() {
             channel: channel
         }));
 
-        setupOffer.onclick();
-
         var info = document.getElementById('info');
         if (location.hash.length > 2) {
             document.getElementById('share-this-link').innerHTML = '<a href="' + location.href + '" target="_blank">Share this link with other users!</a>';
