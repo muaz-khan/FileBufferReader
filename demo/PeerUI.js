@@ -9,7 +9,7 @@ window.addEventListener('load', function() {
     var setupOffer = document.getElementById('setup-offer'),
         innerHTML;
 
-    var SIGNALING_URI = 'wss://webrtc-signaling.herokuapp.com:443/ws/';
+    var SIGNALING_URI = 'wss://webrtcweb.com:9449/';
 
     var channel = location.href.replace(/\/|:|#|%|\.|\[|\]/g, '');
 
@@ -62,6 +62,8 @@ window.addEventListener('load', function() {
 
         var html = '<a class="single-line-text" href="' + file.url + '" target="_blank" download="' + file.name + '">Download <span class="highlighted-name">' + file.name + '</span> on your Disk!</a>';
 
+        html += '<section class="button"><a href="' + file.url + '" target="_blank" download="' + file.name + '"">Download</a><p class="top">' + file.name + '</p><p class="bottom">' + bytesToSize(file.size) + '</p></section>';
+
         if (file.name.match(/\.jpg|\.png|\.jpeg|\.gif/gi)) {
             html += '<img crossOrigin="anonymous" src="' + file.url + '">';
         } else if (file.name.match(/\.wav|\.mp3/gi)) {
@@ -84,6 +86,10 @@ window.addEventListener('load', function() {
             li.innerHTML = '<pre style="text-align:left;" class="file-name">' + file.name + '</pre><br><progress style="display:none;" value="0"></progress><div class="circular-progress-bar c100 p25" style="margin-left: 40%;"><span class="circular-progress-bar-percentage">25%</span><div class="slice"><div class="bar"></div><div class="fill"></div></div></div>';
             li.style['min-height'] = '350px';
             outputPanel.insertBefore(li, outputPanel.firstChild);
+
+            outputPanel.className = 'fit-screen';
+            outputPanel.style.height = innerHeight + 'px';
+
             progressHelper[file.uuid] = {
                 li: li,
                 progress: li.querySelector('progress'),
@@ -113,6 +119,8 @@ window.addEventListener('load', function() {
             }
 
             progressHelper.lastFileUUID = null;
+            outputPanel.className = '';
+            outputPanel.style.height = 'auto';
         },
         onProgress: function(chunk) {
             var helper = progressHelper[chunk.uuid];
