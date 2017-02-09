@@ -1,4 +1,4 @@
-// Last time updated: 2017-01-18 10:28:28 AM UTC
+// Last time updated: 2017-02-06 5:26:18 PM UTC
 
 // ________________
 // FileBufferReader
@@ -33,6 +33,12 @@
                     userid: 0
                 }
             };
+
+            if (file.extra && Object.keys(file.extra).length) {
+                Object.keys(file.extra).forEach(function(key) {
+                    options.extra[key] = file.extra[key];
+                });
+            }
 
             fbrHelper.readAsArrayBuffer(fbr, options);
         };
