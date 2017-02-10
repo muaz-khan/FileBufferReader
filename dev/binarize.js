@@ -121,9 +121,9 @@ var find_type = function(obj) {
             // return type by .constructor.name if possible
             type = Types[const_name.toUpperCase()];
 
-        } else if(const_name_reflection !== undefined && Types[const_name_reflection.toUpperCase()] !== undefined) {                
-                type = Types[const_name_reflection.toUpperCase()];
-        
+        } else if (const_name_reflection !== undefined && Types[const_name_reflection.toUpperCase()] !== undefined) {
+            type = Types[const_name_reflection.toUpperCase()];
+
         } else {
             // Work around when constructor.name is not defined
             switch (typeof obj) {
