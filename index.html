@@ -1,3 +1,5 @@
+<script>window.demoVersion = '2017.08.27';</script>
+
 <!--
 > Muaz Khan     - wwww.MuazKhan.com
 > MIT License   - www.WebRTC-Experiment.com/licence
@@ -8,7 +10,7 @@
 <html id="home" lang="en">
 
 <head>
-    <title>FileSharing using FileBufferReader</title>
+    <title>WebRTC File Sharing | FileBufferReader</title>
     <meta name="description" content="Peer-to-Peer file sharing using FileBufferReader.js and WebRTC!" />
     <meta name="keywords" content="FileSharing,File,Sharing,Peer-to-Peer,Peer2Peer,P2P,JavaScript,WebRTC,Demos,Experiments,Samples,Examples" />
 
@@ -261,11 +263,11 @@
 <body>
     <article>
         <header style="text-align: center;">
-            <h1>
-                FileSharing using FileBufferReader
+            <h1 style="border:0;">
+                WebRTC File Sharing | FileBufferReader
             </h1>
 
-            <p>
+            <p style="margin-top: 15px;">
                 <a href="https://www.webrtc-experiment.com/">HOME</a>
                 <span> &copy; </span>
                 <a href="http://www.MuazKhan.com/" target="_blank">Muaz Khan</a> .
@@ -276,14 +278,13 @@
             </p>
         </header>
 
-        <div class="github-stargazers"></div>
-
-        <blockquote>
-            <a href="https://www.youtube.com/watch?v=gv8xpdGdS4o" target="_blank">Watch a YouTube video</a> to understand how it works.
-        </blockquote>
+        <section style="text-align: center; margin-top: 15px; margin-bottom: -20px; color: red; font-family: Courier New; font-weight: bold;" id="demoVersion"></section>
+        <script>document.getElementById('demoVersion').innerHTML = 'Last Updated On: <time>' + new Date(window.demoVersion).toDateString() + '</time>';</script>
 
         <section id="main-container" class="experiment">
-          <h2 class="specific-h2"><a id="demo" href="#demo">FileBufferReader Demo</a></h2>
+          <div style="text-align: center;">
+            <a href="https://www.youtube.com/watch?v=gv8xpdGdS4o" target="_blank">Watch a YouTube video</a> to understand <b>how this demo works</b>.
+          </div>
 
           <div style="text-align:center;">
             <br>
@@ -295,7 +296,9 @@
             <span id="share-this-link"></span>
             <br><br>
 
-            <button id="select-file" disabled style="font-size: 2em;">Select & Share A File</button>
+            <button id="select-file" disabled style="font-size: 2em;">Single</button>
+            <button id="select-multiple" disabled style="font-size: 2em;">Multiple</button>
+            <button id="select-directory" disabled style="font-size: 2em;">Directory</button>
           </div>
 
           <ol class="output-panel"></ol>
@@ -303,26 +306,12 @@
           <blockquote id="info" style="display:none;"></blockquote>
         </section>
 
-        <blockquote>
-            FileBufferReader is a JavaScript library reads file and returns chunkified array-buffers. The resulting buffers can be shared using WebRTC data channels or socket.io.
-        </blockquote>
-
-        <section class="experiment own-widgets">
-            <h2 class="header" id="updates" style="color: red;padding-bottom: .1em;"><a href="https://github.com/muaz-khan/FileBufferReader/issues">Latest Issues</a></h2>
-            <div id="github-issues"></div>
+        <section class="experiment" style="padding: 10px 20px;">
+          FileBufferReader is a JavaScript library reads file and returns chunkified array-buffers. The resulting buffers can be shared using WebRTC data channels or socket.io. It is <a href="https://github.com/muaz-khan/FileBufferReader">Open Sourced on Github</a>
         </section>
 
-        <section style="border: 1px solid rgb(189, 189, 189); border-radius: .2em; margin: 1em 3em;">
-            <h2 id="feedback" style="border-bottom: 1px solid rgb(189, 189, 189); padding: .2em .4em;">Want to ask a Question?</h2>
-            <div>
-                <textarea id="message" style="border: 1px solid rgb(189, 189, 189); height: 8em; margin: .2em; outline: none; resize: vertical; width: 98%;" placeholder="Feel free to ask any question regarding FileBufferReader.js!"></textarea>
-            </div>
-            <button id="send-message" style="font-size: 1em;">Ask a Question</button><small style="margin-left: 1em;">You can include your email for private conversation!</small>
-        </section>
-
-        <section class="experiment own-widgets latest-commits">
-            <h2 class="header" id="updates" style="color: red; padding-bottom: .1em;"><a href="https://github.com/muaz-khan/WebRTC-Experiment/commits/master" target="_blank">Latest Updates</a></h2>
-            <div id="github-commits"></div>
+        <section class="experiment">
+            <small id="send-message"></small>
         </section>
     </article>
 
@@ -335,11 +324,7 @@
             <a href="https://github.com/muaz-khan" target="_blank">Github</a>
         </p>
     </footer>
-
-    <script>
-      window.useThisGithubPath = 'muaz-khan/FileBufferReader';
-    </script>
-    <script src="https://cdn.webrtc-experiment.com/commits.js"></script>
+    <script src="https://cdn.webrtc-experiment.com/common.js"></script>
 </body>
 
 </html>
