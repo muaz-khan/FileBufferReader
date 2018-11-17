@@ -439,7 +439,6 @@ window.addEventListener('load', function() {
         if (isStoppedTimer) return;
 
         var step = 1;
-
         var remainingProgress = 1.0 - progress.position;
 
         var estimatedCompletionTime = Math.round((remainingProgress / progress.position) * progressIterations);

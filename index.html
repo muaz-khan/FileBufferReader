@@ -21,8 +21,9 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
 
     <script src="demo/IceServersHandler.js"></script>
-    <script src="FileBufferReader.js"></script>
+    <script src="demo/adapter-latest.js"></script>
     <script src="demo/PeerConnection.js"> </script>
+    <script src="FileBufferReader.js"></script>
 
 <style type="text/css">
 * {
@@ -74,8 +75,13 @@ article {
 }
 
 .connection-status:hover {
-  background: #484848!important;
-  color: white!important;
+  background: #d9f3ff!important;
+  color: black!important;
+}
+
+.connection-status.connecting {
+  background: #d0f4c1;
+  border-color: #d0f4c1;
 }
 
 .connection-status.connected {
@@ -98,6 +104,13 @@ article {
   margin-top: 5px;
 }
 
+.time-remaining {
+    position: absolute;
+    top: 220px;
+    text-align: center;
+    width: 320px;
+}
+
 .progress-bar, .progress-bar-background {
   position: absolute;
   width: 320px;
@@ -114,20 +127,65 @@ article {
   font-size: 300%;
   color: red;
 }
+
+.btn-pause, .btn-close {
+  position: absolute;
+  background-repeat: no-repeat;
+  background-size: 24px;
+  background-position: center center;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  top: 200px;
+}
+
+.btn-pause {
+    margin-left: 5px;
+}
+
+.btn-close {
+    margin-left: 283px;
+}
+
+.btn-pause:hover, .btn-close:hover {
+  background-color: #d9f3ff;
+}
+
+.btn-close {
+  background-image: url(icons/close-icon.png);
+}
+
+.btn-pause {
+  background-image: url(icons/pause-icon.png);
+}
 </style>
 </head>
 
 <body>
 <article>
-<div class="connection-status">Connecting to a websocket server..</div>
-<h1>WebRTC File Sharing</h1>
+<div class="connection-status">Connecting<img src="icons/loading.gif"></div>
+<h1><time datetime="2018-11-17T01:00">WebRTC File Sharing</time></h1>
 <div class="select-file"></div>
 
 <br><br>
 <div class="output-panel"></div>
 
 <br><br>
-<footer>Source code: <a href="https://github.com/muaz-khan/FileBufferReader">FileBufferReader.js</a></footer>
+<footer>
+    <p>Source code: <a href="https://github.com/muaz-khan/FileBufferReader">FileBufferReader.js</a></p>
+    <p>
+        <label>Chunk Size:</label>
+        <select id="chunkSize">
+            <option>60000</option>
+            <option>50000</option>
+            <option>40000</option>
+            <option>30000</option>
+            <option>20000</option>
+            <option>16000</option>
+            <option>8000</option>
+        </select> bytes
+    </p>
+</footer>
 </article>
 
 <script type="text/javascript">
@@ -146,7 +204,7 @@ connectionStatus.onclick = function() {
 var websocket = new WebSocket(SIGNALING_URI);
 websocket.onopen = function() {
     websocket.isOpened = true;
-    connectionStatus.innerHTML = 'Waiting for someone to join you..';
+    connectionStatus.innerHTML = 'Waiting for someone to join you<img src="icons/loading.gif">';
 
     websocket.push(JSON.stringify({
         open: true,
@@ -221,11 +279,12 @@ var FileHelper = {
         html += '<div class="progress-bar-background" data-progress=0 style="width:0px;"></div>';
         html += '<div class="progress-bar">';
         html += '<div class="percentage">0%</div>';
-        html += '<div class="size-remaining">' + bytesToSize(file.size) + ' out of ' + bytesToSize(file.size) + '</div>';
+        html += '<div class="size-remaining">1KB out of ' + bytesToSize(file.size) + '</div>';
+        html += '<div class="time-remaining"><img src="icons/loading.gif"></div>';
+        html += '<div class="btn-close"></div>';
+        html += '<div class="btn-pause"></div>';
         html += '</div>';
         html += '<div class="file-name">' + fName + '</div>';
-        html += '<div class="btn-close" style="display: none;"></div>';
-        html += '<div class="btn-pause" style="display: none;"></div>';
         html += '<progress min=0 max=' + file.maxChunks + ' style="display:none;"></progress>';
 
         div.innerHTML = html;
@@ -253,6 +312,7 @@ var FileHelper = {
             var btn = div.querySelector('.btn-pause');
             if (paused) {
                 paused = false;
+                isPausedTimer = false;
                 btn.style.backgroundImage = 'url(https://cdn.webrtc-experiment.com/FileBufferReader/icons/pause-icon.png)';
                 if (peerConnection.resumeCallback) {
                     peerConnection.resumeCallback();
@@ -264,12 +324,15 @@ var FileHelper = {
             }
 
             paused = true;
+            isPausedTimer = true;
             btn.style.backgroundImage = 'url(https://cdn.webrtc-experiment.com/FileBufferReader/icons/resume-icon.png)';
             peerConnection.resumeCallback = null;
             peerConnection.paused = true;
 
             peerConnection.send('paused:::' + file.uuid);
         };
+
+        calculateTimeRemaining(div.querySelector('progress'), div.querySelector('.time-remaining'));
     },
     onEnd: function(file) {
         previewFile(file);
@@ -307,10 +370,57 @@ var FileHelper = {
         progressBarBackground.style.width = width + 'px';
         progressBarBackground.setAttribute('data-progress', position);
 
-        var remainingFileSize = (chunk.size / chunk.maxChunks) * (chunk.maxChunks - chunk.currentPosition);
-        sizeRemaining.innerHTML = bytesToSize(remainingFileSize) + ' out of ' + bytesToSize(chunk.size);
+        // var remainingFileSize = (chunk.size / chunk.maxChunks) * (chunk.maxChunks - chunk.currentPosition);
+        var sentFileSize = ((chunk.size / chunk.maxChunks) * chunk.currentPosition);
+        sizeRemaining.innerHTML = bytesToSize(sentFileSize) + ' out of ' + bytesToSize(chunk.size);
     }
 };
+
+var progressIterations = 0;
+var ONE_SECOND = 1000;
+var isPausedTimer = false;
+
+function calculateTimeRemaining(progress, timeRemaining) {
+    if(!timeRemaining || !timeRemaining.parentNode) return;
+    if(!progress || !progress.parentNode) return
+
+    var step = 1;
+    var remainingProgress = 1.0 - progress.position;
+
+    var estimatedCompletionTime = Math.round((remainingProgress / progress.position) * progressIterations);
+    var estimatedHours, estimatedMinutes, estimatedSeconds, displayHours, displayMinutes, displaySeconds;
+    progressIterations += step;
+
+    if (progress.position < 1.0) {
+        if (isFinite(estimatedCompletionTime)) {
+            estimatedHours = Math.floor(estimatedCompletionTime / 3600);
+            displayHours = estimatedHours > 9 ? estimatedHours : '0' + estimatedHours;
+            estimatedMinutes = Math.floor((estimatedCompletionTime / 60) % 60);
+            displayMinutes = estimatedMinutes > 9 ? estimatedMinutes : '0' + estimatedMinutes;
+            estimatedSeconds = estimatedCompletionTime % 60;
+            displaySeconds = estimatedSeconds > 9 ? estimatedSeconds : '0' + estimatedSeconds;
+        }
+
+        var output = '';
+        if (displayHours > 0) {
+            output += displayHours + ' hours ';
+        }
+        if (displayMinutes > 0) {
+            output += displayMinutes + ' minutes ';
+        }
+        if (displaySeconds > 0) {
+            output += displaySeconds + ' seconds ';
+        }
+
+        if (output.length && !isPausedTimer) {
+            timeRemaining.innerHTML = output + ' remaining';
+        }
+    }
+
+    setTimeout(function() {
+        calculateTimeRemaining(progress, timeRemaining);
+    }, ONE_SECOND);
+}
 
 // RTCPeerConection
 // ----------------
@@ -318,7 +428,9 @@ var peerConnection = new PeerConnection(websocket);
 
 peerConnection.onuserfound = function(userid) {
     peerConnection.isOpened = true;
-    connectionStatus.innerHTML = 'Someone is joining you..';
+    connectionStatus.innerHTML = 'Someone is joining you<img src="icons/loading.gif">';
+    connectionStatus.classList.remove('connected');
+    connectionStatus.classList.add('connecting');
     peerConnection.sendParticipationRequest(userid);
 };
 
@@ -326,6 +438,7 @@ peerConnection.onopen = function() {
     peerConnection.isOpened = true;
 
     connectionStatus.innerHTML = 'You are connected with someone.';
+    connectionStatus.classList.remove('connecting');
     connectionStatus.classList.add('connected');
 
     if(peerConnection.onWebRTCOpened) {
@@ -337,8 +450,8 @@ peerConnection.onopen = function() {
 peerConnection.onclose = function() {
     peerConnection.isOpened = false;
     
-    connectionStatus.innerHTML = 'Waiting for someone to join you..';
-    connectionStatus.classList.remove('connected');
+    connectionStatus.innerHTML = 'Waiting for someone to join you<img src="icons/loading.gif">';
+    connectionStatus.classList.remove('connected', 'connecting');
 
     peerConnection.isOpened = false;
 
@@ -350,8 +463,8 @@ peerConnection.onclose = function() {
 
 peerConnection.onerror = function() {
     peerConnection.isOpened = false;
-    connectionStatus.innerHTML = 'Waiting for someone to join you..';
-    connectionStatus.classList.remove('connected');
+    connectionStatus.innerHTML = 'Waiting for someone to join you<img src="icons/loading.gif">';
+    connectionStatus.classList.remove('connected', 'connecting');
 };
 
 // getNextChunkCallback gets next available buffer
@@ -380,6 +493,7 @@ peerConnection.ondata = function(chunk) {
         if (div && div.querySelector('.btn-pause')) {
             div.querySelector('.btn-pause').style.backgroundImage = 'url(https://cdn.webrtc-experiment.com/FileBufferReader/icons/resume-icon.png)';
         }
+        isPausedTimer = true;
         return;
     }
 
@@ -388,6 +502,7 @@ peerConnection.ondata = function(chunk) {
         if (div && div.querySelector('.btn-pause')) {
             div.querySelector('.btn-pause').style.backgroundImage = 'url(https://cdn.webrtc-experiment.com/FileBufferReader/icons/pause-icon.png)';
         }
+        isPausedTimer = false;
         return;
     }
 
@@ -456,7 +571,7 @@ fileSelector.accept = '*.*';
 
 var fileBufferReader = new FileBufferReader();
 
-fileBufferReader.chunkSize = 60 * 1000; // 60k
+// fileBufferReader.chunkSize = 60000; // 60k
 
 fileBufferReader.onBegin = FileHelper.onBegin;
 fileBufferReader.onProgress = FileHelper.onProgress;
@@ -468,7 +583,7 @@ function onFileSelected(file) {
     fileBufferReader.readAsArrayBuffer(file, function(metadata) {
         fileBufferReader.getNextChunk(metadata, getNextChunkCallback);
     }, {
-        chunkSize: fileBufferReader.chunkSize,
+        chunkSize: parseInt(document.getElementById('chunkSize').value),
         webkitRelativePath: file.webkitRelativePath || file.name
     });
 }
@@ -581,8 +696,8 @@ selectFile.onclick = function(event) {
         return;
     }
 
-    connectionStatus.innerHTML = 'Waiting for someone to join you..';
-    connectionStatus.classList.remove('connected');
+    connectionStatus.innerHTML = 'Waiting for someone to join you<img src="icons/loading.gif">';
+    connectionStatus.classList.remove('connected', 'connecting');
 
     setTimeout(function() {
         if (!peerConnection.isOpened) {
